@@ -1,3 +1,4 @@
+
 package com.fundoonotes.service.impl;
 
 import com.fundoonotes.dto.response.NoteResponse;
@@ -8,6 +9,7 @@ import com.fundoonotes.repository.NoteRepository;
 import com.fundoonotes.repository.UserRepository;
 import com.fundoonotes.service.NoteSearchService;
 import java.util.List;
+import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -21,7 +23,8 @@ import org.springframework.web.server.ResponseStatusException;
  * Date         : 14-11-2026
  *
  * Description:
- * Implements keyword-based note searching and label filtering.
+ * Implements keyword-based note searching, label filtering,
+ * and filtering by note status.
  * Restricts search results to the authenticated user's notes.
  */
 
@@ -36,14 +39,19 @@ public class NoteSearchServiceImpl implements NoteSearchService {
 
     @Override
     public List<NoteResponse> searchNotes(
-            String keyword, Long labelId, String email) {
+            String keyword,
+            Long labelId,
+            String status,
+            String email) {
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.UNAUTHORIZED, "User not found"));
 
         if (labelId != null &&
-                !labelRepository.existsByIdAndUser_Id(labelId, user.getId())) {
+                !labelRepository.existsByIdAndUser_Id(
+                        labelId, user.getId())) {
+
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND, "Label not found");
         }
@@ -52,8 +60,23 @@ public class NoteSearchServiceImpl implements NoteSearchService {
                 ? null
                 : keyword.trim();
 
-        return noteRepository.searchActiveNotes(
-                        user.getId(), searchKeyword, labelId)
+        String searchStatus = status == null || status.isBlank()
+                ? "ACTIVE"
+                : status.trim().toUpperCase(Locale.ROOT);
+
+        if (!List.of("ACTIVE", "PINNED", "ARCHIVED", "TRASHED")
+                .contains(searchStatus)) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Invalid status. Allowed values: ACTIVE, PINNED, ARCHIVED, TRASHED");
+        }
+
+        return noteRepository.searchNotesByStatus(
+                        user.getId(),
+                        searchKeyword,
+                        labelId,
+                        searchStatus)
                 .stream()
                 .map(this::toResponse)
                 .toList();

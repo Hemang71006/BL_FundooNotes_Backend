@@ -1,3 +1,4 @@
+
 package com.fundoonotes.service.impl;
 
 import com.fundoonotes.dto.response.NoteResponse;
@@ -13,8 +14,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -25,8 +29,8 @@ import static org.mockito.Mockito.when;
  * Date         : 14-11-2026
  *
  * Description:
- * Tests keyword and label-based note searching.
- * Verifies that search queries use the authenticated user's ID.
+ * Tests keyword, label, and status-based note searching.
+ * Verifies that searches use the authenticated user's ID.
  */
 
 @ExtendWith(MockitoExtension.class)
@@ -59,15 +63,17 @@ class NoteSearchServiceImplTest {
     @Test
     void searchByKeyword() {
 
-        when(noteRepository.searchActiveNotes(1L, "java", null))
+        when(noteRepository.searchNotesByStatus(
+                1L, "java", null, "ACTIVE"))
                 .thenReturn(List.of());
 
         List<NoteResponse> result = noteSearchService.searchNotes(
-                "java", null, "test@example.com");
+                "java", null, null, "test@example.com");
 
         assertEquals(0, result.size());
 
-        verify(noteRepository).searchActiveNotes(1L, "java", null);
+        verify(noteRepository).searchNotesByStatus(
+                1L, "java", null, "ACTIVE");
     }
 
     @Test
@@ -76,15 +82,17 @@ class NoteSearchServiceImplTest {
         when(labelRepository.existsByIdAndUser_Id(10L, 1L))
                 .thenReturn(true);
 
-        when(noteRepository.searchActiveNotes(1L, null, 10L))
+        when(noteRepository.searchNotesByStatus(
+                1L, null, 10L, "ACTIVE"))
                 .thenReturn(List.of());
 
         List<NoteResponse> result = noteSearchService.searchNotes(
-                null, 10L, "test@example.com");
+                null, 10L, null, "test@example.com");
 
         assertEquals(0, result.size());
 
-        verify(noteRepository).searchActiveNotes(1L, null, 10L);
+        verify(noteRepository).searchNotesByStatus(
+                1L, null, 10L, "ACTIVE");
     }
 
     @Test
@@ -93,14 +101,97 @@ class NoteSearchServiceImplTest {
         when(labelRepository.existsByIdAndUser_Id(10L, 1L))
                 .thenReturn(true);
 
-        when(noteRepository.searchActiveNotes(1L, "java", 10L))
+        when(noteRepository.searchNotesByStatus(
+                1L, "java", 10L, "ACTIVE"))
                 .thenReturn(List.of());
 
         List<NoteResponse> result = noteSearchService.searchNotes(
-                "java", 10L, "test@example.com");
+                "java", 10L, null, "test@example.com");
 
         assertEquals(0, result.size());
 
-        verify(noteRepository).searchActiveNotes(1L, "java", 10L);
+        verify(noteRepository).searchNotesByStatus(
+                1L, "java", 10L, "ACTIVE");
+    }
+
+    @Test
+    void searchPinnedNotes() {
+
+        when(noteRepository.searchNotesByStatus(
+                1L, null, null, "PINNED"))
+                .thenReturn(List.of());
+
+        noteSearchService.searchNotes(
+                null, null, "PINNED", "test@example.com");
+
+        verify(noteRepository).searchNotesByStatus(
+                1L, null, null, "PINNED");
+    }
+
+    @Test
+    void searchArchivedNotes() {
+
+        when(noteRepository.searchNotesByStatus(
+                1L, null, null, "ARCHIVED"))
+                .thenReturn(List.of());
+
+        noteSearchService.searchNotes(
+                null, null, "ARCHIVED", "test@example.com");
+
+        verify(noteRepository).searchNotesByStatus(
+                1L, null, null, "ARCHIVED");
+    }
+
+    @Test
+    void searchTrashedNotes() {
+
+        when(noteRepository.searchNotesByStatus(
+                1L, null, null, "TRASHED"))
+                .thenReturn(List.of());
+
+        noteSearchService.searchNotes(
+                null, null, "TRASHED", "test@example.com");
+
+        verify(noteRepository).searchNotesByStatus(
+                1L, null, null, "TRASHED");
+    }
+
+    @Test
+    void searchStatusShouldBeCaseInsensitive() {
+
+        when(noteRepository.searchNotesByStatus(
+                1L, null, null, "PINNED"))
+                .thenReturn(List.of());
+
+        noteSearchService.searchNotes(
+                null, null, "pinned", "test@example.com");
+
+        verify(noteRepository).searchNotesByStatus(
+                1L, null, null, "PINNED");
+    }
+
+    @Test
+    void searchShouldRejectInvalidStatus() {
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> noteSearchService.searchNotes(
+                        null, null, "DELETED", "test@example.com"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+    }
+
+    @Test
+    void searchShouldRejectLabelOwnedByAnotherUser() {
+
+        when(labelRepository.existsByIdAndUser_Id(10L, 1L))
+                .thenReturn(false);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> noteSearchService.searchNotes(
+                        null, 10L, null, "test@example.com"));
+
+        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
     }
 }
