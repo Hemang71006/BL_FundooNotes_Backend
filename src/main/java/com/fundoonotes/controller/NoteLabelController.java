@@ -1,3 +1,4 @@
+
 package com.fundoonotes.controller;
 
 import com.fundoonotes.dto.response.LabelResponse;
@@ -20,8 +21,8 @@ import org.springframework.web.bind.annotation.RestController;
  * Date         : 14-11-2026
  *
  * Description:
- * Exposes REST APIs for assigning labels to notes.
- * Supports adding and removing note-label associations.
+ * Exposes APIs to associate labels with notes and remove those associations.
+ * Uses the authenticated user's email to verify ownership.
  */
 
 @RestController
@@ -32,7 +33,8 @@ public class NoteLabelController {
     private final LabelService labelService;
 
     @PostMapping("/{labelId}")
-    public LabelResponse addLabel(
+    @ResponseStatus(HttpStatus.OK)
+    public LabelResponse addLabelToNote(
             @PathVariable Long noteId,
             @PathVariable Long labelId,
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -43,7 +45,7 @@ public class NoteLabelController {
 
     @DeleteMapping("/{labelId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void removeLabel(
+    public void removeLabelFromNote(
             @PathVariable Long noteId,
             @PathVariable Long labelId,
             @AuthenticationPrincipal UserDetails userDetails) {

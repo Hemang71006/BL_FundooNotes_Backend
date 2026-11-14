@@ -1,3 +1,4 @@
+
 package com.fundoonotes.repository;
 
 import com.fundoonotes.entity.Note;
@@ -38,8 +39,6 @@ public interface NoteRepository extends JpaRepository<Note, Long> {
         FROM Note n
         LEFT JOIN n.labels l
         WHERE n.user.id = :userId
-          AND n.archived = false
-          AND n.trashed = false
           AND (
               :keyword IS NULL
               OR :keyword = ''
@@ -48,10 +47,28 @@ public interface NoteRepository extends JpaRepository<Note, Long> {
                     LIKE LOWER(CONCAT('%', :keyword, '%'))
           )
           AND (:labelId IS NULL OR l.id = :labelId)
+          AND (
+              (:status = 'ACTIVE'
+                  AND n.archived = false
+                  AND n.trashed = false)
+              OR
+              (:status = 'PINNED'
+                  AND n.pinned = true
+                  AND n.archived = false
+                  AND n.trashed = false)
+              OR
+              (:status = 'ARCHIVED'
+                  AND n.archived = true
+                  AND n.trashed = false)
+              OR
+              (:status = 'TRASHED'
+                  AND n.trashed = true)
+          )
         ORDER BY n.updatedAt DESC
         """)
-    List<Note> searchActiveNotes(
+    List<Note> searchNotesByStatus(
             @Param("userId") Long userId,
             @Param("keyword") String keyword,
-            @Param("labelId") Long labelId);
+            @Param("labelId") Long labelId,
+            @Param("status") String status);
 }

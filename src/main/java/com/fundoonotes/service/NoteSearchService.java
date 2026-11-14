@@ -1,3 +1,4 @@
+
 package com.fundoonotes.service;
 
 import com.fundoonotes.dto.response.NoteResponse;
@@ -10,12 +11,15 @@ import java.util.List;
  * Date         : 14-11-2026
  *
  * Description:
- * Defines operations for searching and filtering active notes.
- * Supports keyword searches and label-based filtering.
+ * Defines operations for searching and filtering notes.
+ * Supports keyword, label, and note-status filtering.
  */
 
 public interface NoteSearchService {
 
     List<NoteResponse> searchNotes(
-            String keyword, Long labelId, String email);
+            String keyword,
+            Long labelId,
+            String status,
+            String email);
 }

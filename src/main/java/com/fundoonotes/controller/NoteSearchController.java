@@ -1,3 +1,4 @@
+
 package com.fundoonotes.controller;
 
 import com.fundoonotes.dto.response.NoteResponse;
@@ -18,8 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
  * Date         : 14-11-2026
  *
  * Description:
- * Exposes the REST API for searching and filtering notes.
- * Accepts an optional keyword and an optional label ID.
+ * Exposes REST APIs for searching and filtering notes.
+ * Supports optional keyword, label ID, and status parameters.
  */
 
 @RestController
@@ -33,9 +34,13 @@ public class NoteSearchController {
     public List<NoteResponse> searchNotes(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Long labelId,
+            @RequestParam(required = false) String status,
             @AuthenticationPrincipal UserDetails userDetails) {
 
         return noteSearchService.searchNotes(
-                keyword, labelId, userDetails.getUsername());
+                keyword,
+                labelId,
+                status,
+                userDetails.getUsername());
     }
 }

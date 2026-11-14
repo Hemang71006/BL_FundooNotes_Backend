@@ -155,4 +155,69 @@ class NoteRepositoryTest {
 
         assertTrue(result.isEmpty());
     }
+
+
+    @Test
+    void shouldSearchActiveNotesByStatus() {
+
+        Note note = new Note();
+        note.setTitle("Active Java note");
+        note.setUser(user);
+        noteRepository.save(note);
+
+        List<Note> results = noteRepository.searchNotesByStatus(
+                user.getId(), "java", null, "ACTIVE");
+
+        assertEquals(1, results.size());
+        assertEquals("Active Java note", results.get(0).getTitle());
+    }
+
+    @Test
+    void shouldSearchPinnedNotesByStatus() {
+
+        Note note = new Note();
+        note.setTitle("Pinned note");
+        note.setPinned(true);
+        note.setUser(user);
+        noteRepository.save(note);
+
+        List<Note> results = noteRepository.searchNotesByStatus(
+                user.getId(), null, null, "PINNED");
+
+        assertEquals(1, results.size());
+        assertTrue(results.get(0).isPinned());
+    }
+
+    @Test
+    void shouldSearchArchivedNotesByStatus() {
+
+        Note note = new Note();
+        note.setTitle("Archived note");
+        note.setArchived(true);
+        note.setUser(user);
+        noteRepository.save(note);
+
+        List<Note> results = noteRepository.searchNotesByStatus(
+                user.getId(), null, null, "ARCHIVED");
+
+        assertEquals(1, results.size());
+        assertTrue(results.get(0).isArchived());
+    }
+
+    @Test
+    void shouldSearchTrashedNotesByStatus() {
+
+        Note note = new Note();
+        note.setTitle("Trashed note");
+        note.setTrashed(true);
+        note.setUser(user);
+        noteRepository.save(note);
+
+        List<Note> results = noteRepository.searchNotesByStatus(
+                user.getId(), null, null, "TRASHED");
+
+        assertEquals(1, results.size());
+        assertTrue(results.get(0).isTrashed());
+    }
+
 }

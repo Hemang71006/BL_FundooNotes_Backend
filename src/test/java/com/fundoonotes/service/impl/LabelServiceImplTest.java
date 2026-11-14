@@ -1,3 +1,4 @@
+
 package com.fundoonotes.service.impl;
 
 import com.fundoonotes.dto.request.LabelRequest;
@@ -8,6 +9,7 @@ import com.fundoonotes.entity.User;
 import com.fundoonotes.repository.LabelRepository;
 import com.fundoonotes.repository.NoteRepository;
 import com.fundoonotes.repository.UserRepository;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -31,8 +34,8 @@ import static org.mockito.Mockito.when;
  * Date         : 14-11-2026
  *
  * Description:
- * Tests label creation, duplicate validation, and note-label associations.
- * Verifies that labels and notes are accessed only by their owners.
+ * Tests label CRUD and note-label association operations.
+ * Verifies ownership checks and invalid note-state handling.
  */
 
 @ExtendWith(MockitoExtension.class)
@@ -124,6 +127,8 @@ class LabelServiceImplTest {
 
         assertEquals(10L, response.getId());
         assertEquals("Work", response.getName());
+        assertEquals(1, note.getLabels().size());
+
         verify(noteRepository).save(note);
     }
 
@@ -147,6 +152,90 @@ class LabelServiceImplTest {
     }
 
     @Test
+    void addLabelShouldRejectTrashedNote() {
+
+        Note note = new Note();
+        note.setId(5L);
+        note.setTrashed(true);
+
+        when(noteRepository.findByIdAndUser_Id(5L, 1L))
+                .thenReturn(Optional.of(note));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> labelService.addLabelToNote(
+                        5L, 10L, "test@example.com"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+
+        verify(labelRepository, never())
+                .findByIdAndUser_Id(10L, 1L);
+
+        verify(noteRepository, never()).save(any(Note.class));
+    }
+
+    @Test
+    void removeLabelFromNoteSuccessfully() {
+
+        Note note = new Note();
+        note.setId(5L);
+
+        Label label = new Label();
+        label.setId(10L);
+        label.setName("Work");
+
+        note.getLabels().add(label);
+
+        when(noteRepository.findByIdAndUser_Id(5L, 1L))
+                .thenReturn(Optional.of(note));
+
+        when(labelRepository.findByIdAndUser_Id(10L, 1L))
+                .thenReturn(Optional.of(label));
+
+        labelService.removeLabelFromNote(
+                5L, 10L, "test@example.com");
+
+        assertEquals(0, note.getLabels().size());
+        verify(noteRepository).save(note);
+    }
+
+    @Test
+    void removeLabelShouldRejectAnotherUsersLabel() {
+
+        Note note = new Note();
+        note.setId(5L);
+
+        when(noteRepository.findByIdAndUser_Id(5L, 1L))
+                .thenReturn(Optional.of(note));
+
+        when(labelRepository.findByIdAndUser_Id(10L, 1L))
+                .thenReturn(Optional.empty());
+
+        assertThrows(ResponseStatusException.class,
+                () -> labelService.removeLabelFromNote(
+                        5L, 10L, "test@example.com"));
+
+        verify(noteRepository, never()).save(any(Note.class));
+    }
+
+    @Test
+    void labelOperationsShouldRejectAnotherUsersNote() {
+
+        when(noteRepository.findByIdAndUser_Id(5L, 1L))
+                .thenReturn(Optional.empty());
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> labelService.addLabelToNote(
+                        5L, 10L, "test@example.com"));
+
+        assertEquals(HttpStatus.NOT_FOUND, exception.getStatusCode());
+
+        verify(labelRepository, never())
+                .findByIdAndUser_Id(10L, 1L);
+    }
+
+    @Test
     void deleteLabelShouldRemoveItsNoteAssociations() {
 
         Label label = new Label();
@@ -160,7 +249,7 @@ class LabelServiceImplTest {
                 .thenReturn(Optional.of(label));
 
         when(noteRepository.findAllByUser_IdAndLabels_Id(1L, 10L))
-                .thenReturn(java.util.List.of(note));
+                .thenReturn(List.of(note));
 
         labelService.deleteLabel(10L, "test@example.com");
 
