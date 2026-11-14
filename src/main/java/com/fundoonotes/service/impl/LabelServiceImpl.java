@@ -114,13 +114,14 @@ public class LabelServiceImpl implements LabelService {
         User user = getUser(email);
 
         Note note = getNote(noteId, user.getId());
-        Label label = getLabel(labelId, user.getId());
 
         if (note.isTrashed()) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Cannot add a label to a trashed note");
         }
+
+        Label label = getLabel(labelId, user.getId());
 
         note.getLabels().add(label);
         noteRepository.save(note);
