@@ -1,8 +1,9 @@
-
 package com.fundoonotes.repository;
 
 import com.fundoonotes.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.Optional;
 
 /**
  * Project Name : Fundoo Notes Backend
@@ -12,11 +13,15 @@ import org.springframework.data.jpa.repository.JpaRepository;
  *
  * Description:
  * Provides database operations for the User entity.
- * Supports saving users and checking whether an email already exists.
+ * Supports saving users, checking existing emails,
+ * and retrieving users using their email addresses.
  */
 
 public interface UserRepository extends JpaRepository<User, Long> {
 
     // Checks whether a user already exists with the given email.
     boolean existsByEmail(String email);
+
+    // Retrieves a user using their email address.
+    Optional<User> findByEmail(String email);
 }
