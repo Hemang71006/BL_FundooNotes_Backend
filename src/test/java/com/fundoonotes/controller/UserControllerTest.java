@@ -21,6 +21,10 @@ import static org.mockito.Mockito.when;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+import com.fundoonotes.security.JwtService;
+import com.fundoonotes.repository.UserRepository;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 /**
  * Project Name : Fundoo Notes Backend
  * Module       : User Management - Controller Test
@@ -46,6 +50,14 @@ class UserControllerTest {
     // Mocks the service because this test focuses only on the controller.
     @MockitoBean
     private UserService userService;
+
+    // Provides a mock JWT service for the JWT authentication filter.
+    @MockitoBean
+    private JwtService jwtService;
+
+    // Provides a mock repository for the JWT authentication filter.
+    @MockitoBean
+    private UserRepository userRepository;
 
     // Tests whether valid registration returns HTTP 201.
     @Test
