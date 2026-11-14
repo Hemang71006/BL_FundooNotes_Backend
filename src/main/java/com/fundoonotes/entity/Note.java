@@ -21,6 +21,12 @@ import java.time.LocalDateTime;
 
 import com.fundoonotes.entity.User;
 
+import java.util.LinkedHashSet;
+import java.util.Set;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToMany;
+
 /**
  * Project Name : Fundoo Notes Backend
  * Module       : Notes Management - Entity
@@ -67,6 +73,14 @@ public class Note {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
+    @ManyToMany
+    @JoinTable(
+            name = "note_labels",
+            joinColumns = @JoinColumn(name = "note_id"),
+            inverseJoinColumns = @JoinColumn(name = "label_id")
+    )
+    private Set<Label> labels = new LinkedHashSet<>();
 
     @PrePersist
     protected void onCreate() {
