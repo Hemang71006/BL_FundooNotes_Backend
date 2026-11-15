@@ -1,3 +1,4 @@
+
 package com.fundoonotes.cache;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -12,33 +13,52 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 
-// Tests Redis cache storage, retrieval, and eviction.
+/**
+ * Project Name : Fundoo Notes Backend
+ * Module       : Redis Cache Integration Testing
+ * Author       : Hemang
+ * Date         : 14-11-2026
+ *
+ * Description:
+ * Tests Redis cache storage, retrieval, and eviction.
+ * Verifies that the configured CacheManager works correctly.
+ */
 @SpringBootTest
 class RedisCacheIntegrationTest {
 
     @Autowired
     private CacheManager cacheManager;
 
-    // Verifies that a value can be stored and retrieved from Redis cache.
+    /**
+     * Verifies that a value can be stored and retrieved
+     * from the configured Redis cache.
+     */
     @Test
     void shouldStoreAndRetrieveCachedValue() {
 
         Cache cache = cacheManager.getCache("feature12TestCache");
 
-        assertNotNull(cache);
+        assertNotNull(cache, "Test cache should exist");
 
         String key = UUID.randomUUID().toString();
 
-        cache.put(key, "Fundoo Notes");
+        try {
+            cache.put(key, "Fundoo Notes");
 
-        String result = cache.get(key, String.class);
+            Cache.ValueWrapper cachedValue = cache.get(key);
 
-        assertEquals("Fundoo Notes", result);
+            assertNotNull(cachedValue, "Cached value should exist");
 
-        cache.evict(key);
+            assertEquals("Fundoo Notes", cachedValue.get());
+        } finally {
+            cache.evict(key);
+        }
     }
 
-    // Verifies that a cached value can be removed.
+    /**
+     * Verifies that a cached value can be removed
+     * successfully from Redis.
+     */
     @Test
     void shouldEvictCachedValue() {
 
@@ -55,7 +75,10 @@ class RedisCacheIntegrationTest {
         assertNull(cache.get(key));
     }
 
-    // Verifies that the cache manager provides the expected note caches.
+    /**
+     * Verifies that all expected note caches
+     * are available through the CacheManager.
+     */
     @Test
     void shouldCreateNoteCaches() {
 
