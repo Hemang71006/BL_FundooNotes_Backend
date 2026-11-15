@@ -4,13 +4,17 @@ A backend application for a note-taking system inspired by Google Keep, develope
 
 This project is part of the Bridgelabz Java Backend training program. It is developed feature by feature using Git branches, with each feature implemented, tested, and integrated into the development branch.
 
+The project is divided into two parts, covering core Spring Boot backend development and advanced enterprise application concepts.
+
+---
+
 ## Project Overview
 
-Fundoo Notes Backend provides REST APIs for user management, authentication, note management, labels, password recovery, exception handling, and application logging.
+Fundoo Notes Backend provides REST APIs for user management, authentication, note management, labels, password recovery, exception handling, application logging, messaging, caching, batch processing, and advanced architecture integration.
 
-The project follows a layered architecture to maintain separation of concerns, readability, maintainability, and scalability.
+The application follows a layered architecture to maintain separation of concerns, readability, maintainability, and scalability.
 
-## Part 1 – Completed Features
+## Part 1 – Core Backend Development
 
 Part 1 consists of the following eight feature modules:
 
@@ -25,42 +29,86 @@ Part 1 consists of the following eight feature modules:
 | 07 | Global Exception Handling | Provides centralized exception handling and consistent error responses. |
 | 08 | Logging & Debugging | Implements request logging, service-level logging, exception logging, and logging configuration. |
 
+## Part 2 – Advanced Spring Boot Concepts
+
+Part 2 extends the application with messaging systems, caching, batch processing, aspect-oriented programming, and advanced architecture integration.
+
+It consists of the following seven feature modules:
+
+| Feature | Feature Name | Description |
+|---|---|---|
+| 09 | JMS Messaging | Introduces Java Message Service (JMS) for asynchronous communication using message producers and consumers. |
+| 10 | RabbitMQ Integration | Integrates RabbitMQ for message-based communication using exchanges, queues, bindings, and consumers. |
+| 11 | Redis Configuration & Integration | Integrates Redis for in-memory data storage, token management, and temporary data handling. |
+| 12 | Caching Implementation | Implements application-level caching to improve performance and reduce repeated database operations. |
+| 13 | Spring Batch & Excel Processing | Introduces batch processing for handling large datasets and Excel-based data import/export operations. |
+| 14 | Aspect-Oriented Programming (AOP) | Implements aspects, pointcuts, and advice for cross-cutting concerns such as logging, monitoring, and execution tracking. |
+| 15 | Advanced Architecture Integration | Integrates and verifies the advanced components, strengthens cross-feature communication, and explores Spring Cloud and distributed architecture concepts. |
+
+### Part 2 – Key Concepts
+
+- Asynchronous communication using JMS.
+- Message publishing and consumption using RabbitMQ.
+- Redis integration for temporary and frequently accessed data.
+- Cache management, eviction, and consistency.
+- Batch jobs and Excel processing workflows.
+- Cross-cutting concerns using Spring AOP.
+- Integration testing across multiple application components.
+- Spring Cloud concepts and advanced application architecture.
+
 ## Technology Stack
 
-- **Programming Language:** Java 21
-- **Framework:** Spring Boot 4.1.2
-- **Build Tool:** Maven
-- **Database Access:** Spring Data JPA
-- **ORM:** Hibernate
-- **Security:** Spring Security
-- **Authentication:** JSON Web Token (JWT)
-- **Password Security:** Password Encoding
-- **Validation:** Jakarta Bean Validation
-- **Logging:** SLF4J and Logback
-- **Testing:** JUnit 5 and Spring Boot Test
-- **Version Control:** Git and GitHub
+| Category | Technologies |
+|---|---|
+| Programming Language | Java 21 |
+| Framework | Spring Boot 4.1.2 |
+| Build Tool | Maven |
+| Database | MySQL |
+| Database Access | Spring Data JPA |
+| ORM | Hibernate |
+| Security | Spring Security |
+| Authentication | JSON Web Token (JWT) |
+| Password Security | Password Encoding |
+| Validation | Jakarta Bean Validation |
+| Messaging | JMS, ActiveMQ, RabbitMQ |
+| In-memory Data Store | Redis |
+| Caching | Spring Cache |
+| Batch Processing | Spring Batch |
+| Excel Processing | Apache POI |
+| Aspect-Oriented Programming | Spring AOP |
+| Logging | SLF4J and Logback |
+| Testing | JUnit 5 and Spring Boot Test |
+| Version Control | Git and GitHub |
 
 ## Application Architecture
 
-The application follows a layered architecture.
+The application follows a layered architecture with supporting components for security, messaging, caching, and batch processing.
 
 ```text
-                 Client
-                   |
-                   v
-            REST Controllers
-                   |
-                   v
-          Request DTO Validation
-                   |
-                   v
-             Service Layer
-                   |
-                   v
-           Repository Layer
-                   |
-                   v
-               Database
+                    Client
+                      |
+                      v
+              REST Controllers
+                      |
+                      v
+             Request DTO Validation
+                      |
+                      v
+                Service Layer
+                      |
+             +--------+--------+
+             |                 |
+             v                 v
+       Cache Layer        Messaging Layer
+             |             /          \
+             v            v            v
+          Redis          JMS        RabbitMQ
+             |
+             v
+       Repository Layer
+             |
+             v
+           MySQL
 ```
 
 ### Supporting Components
@@ -68,6 +116,11 @@ The application follows a layered architecture.
 - **DTOs:** Transfer request and response data between the client and application.
 - **Security Configuration:** Manages authentication and authorization.
 - **JWT Components:** Handle token generation and validation.
+- **Redis Integration:** Supports token management and temporary data storage.
+- **Caching:** Reduces repeated database operations.
+- **Messaging:** Supports asynchronous communication using JMS and RabbitMQ.
+- **Spring Batch:** Handles batch-oriented processing and Excel workflows.
+- **AOP:** Manages cross-cutting concerns such as logging and monitoring.
 - **Exception Handler:** Handles application exceptions centrally.
 - **Logging Interceptor:** Records incoming requests and completed responses.
 - **Application Configuration:** Manages environment-specific application settings.
@@ -88,6 +141,11 @@ fundoo-notes-backend/
 │   │   │   ├── repository/
 │   │   │   ├── security/
 │   │   │   ├── service/
+│   │   │   ├── redis/
+│   │   │   ├── messaging/
+│   │   │   ├── cache/
+│   │   │   ├── batch/
+│   │   │   ├── aspect/
 │   │   │   └── FundooNotesBackendApplication.java
 │   │   │
 │   │   └── resources/
@@ -101,7 +159,7 @@ fundoo-notes-backend/
 └── README.md
 ```
 
-*The exact package contents may grow as the application develops.*
+*The exact package contents may vary according to implementation and may grow as the application develops.*
 
 ## Prerequisites
 
@@ -110,8 +168,13 @@ Install the following before running the application:
 - Java Development Kit (JDK) 21
 - Apache Maven
 - Git
-- A compatible relational database
+- MySQL
+- Redis
+- RabbitMQ
+- ActiveMQ or another compatible JMS provider
 - An IDE such as IntelliJ IDEA, Eclipse, or VS Code
+
+Additional infrastructure services may be required depending on the feature being executed.
 
 ## Configuration
 
@@ -121,11 +184,18 @@ Before running the application, configure the database and other required enviro
 src/main/resources/application.properties
 ```
 
+Configure the required connection details for:
+
+- MySQL database.
+- Redis server.
+- RabbitMQ broker.
+- JMS provider.
+- Mail server for password recovery.
+- JWT secret and token configuration.
+
 Do not commit actual database passwords, mail credentials, JWT secrets, or other sensitive values to the repository.
 
-Configure the required environment variables before starting the application.
-
-The password recovery functionality also requires the appropriate mail server configuration.
+Use environment variables or an appropriate external configuration mechanism to manage sensitive information.
 
 ## Running the Application
 
@@ -152,6 +222,8 @@ Run the application:
 ```bash
 mvn spring-boot:run
 ```
+
+Ensure that the required external services are configured and running before executing the corresponding features.
 
 ## Running Tests
 
@@ -192,11 +264,25 @@ main
         └── feature/08-logging-debugging
 ```
 
-Each feature is developed and tested independently before being integrated into the development branch.
+### Part 2 Feature Branches
 
-## Part 1 Learning Outcomes
+```text
+develop
+  |
+  ├── feature/09-jms-messaging
+  ├── feature/10-rabbitmq-integration
+  ├── feature/11-redis-integration
+  ├── feature/12-caching-implementation
+  ├── feature/13-spring-batch-excel
+  ├── feature/14-aop-implementation
+  └── feature/15-advanced-architecture-integration
+```
 
-Through Part 1, the project covers the following Spring Boot backend concepts:
+Each feature is developed and tested independently before being integrated into the `develop` branch.
+
+## Learning Outcomes
+
+### Part 1 – Core Backend Development
 
 - Understanding Spring Boot application architecture.
 - Configuring database connectivity.
@@ -213,6 +299,23 @@ Through Part 1, the project covers the following Spring Boot backend concepts:
 - Configuring application logging.
 - Writing and executing unit and integration tests.
 - Managing feature branches and merging changes using Git.
+
+### Part 2 – Advanced Backend Development
+
+- Understanding asynchronous communication using JMS.
+- Implementing message producers and consumers.
+- Integrating RabbitMQ with Spring Boot.
+- Understanding exchanges, queues, and bindings.
+- Integrating Redis with Spring Boot.
+- Managing temporary data and token information using Redis.
+- Implementing caching with Spring Cache.
+- Understanding cache eviction and invalidation.
+- Creating batch jobs using Spring Batch.
+- Processing Excel files using Apache POI.
+- Understanding AOP, aspects, pointcuts, and advice.
+- Implementing cross-cutting concerns.
+- Understanding Spring Cloud and distributed application architecture.
+- Integrating and testing multiple application components.
 
 ## Author
 
