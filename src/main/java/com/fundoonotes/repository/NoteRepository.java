@@ -1,9 +1,10 @@
-
 package com.fundoonotes.repository;
 
 import com.fundoonotes.entity.Note;
+
 import java.util.List;
 import java.util.Optional;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -16,24 +17,48 @@ import org.springframework.data.repository.query.Param;
  *
  * Description:
  * Provides database operations for notes.
- * Supports ownership checks, note filtering, searching, and label associations.
+ * Supports ownership checks, filtering, searching,
+ * and label associations.
  */
-
 public interface NoteRepository extends JpaRepository<Note, Long> {
 
+    /**
+     * Finds a note using its ID and owner ID.
+     */
     Optional<Note> findByIdAndUser_Id(Long id, Long userId);
 
+    /**
+     * Finds all active notes belonging to a user.
+     */
     List<Note> findByUser_IdAndArchivedFalseAndTrashedFalseOrderByUpdatedAtDesc(
             Long userId);
 
+    /**
+     * Finds all archived notes belonging to a user.
+     */
     List<Note> findByUser_IdAndArchivedTrueAndTrashedFalseOrderByUpdatedAtDesc(
             Long userId);
 
+    /**
+     * Finds all trashed notes belonging to a user.
+     */
     List<Note> findByUser_IdAndTrashedTrueOrderByUpdatedAtDesc(
             Long userId);
 
+    /**
+     * Finds notes associated with a particular label.
+     */
     List<Note> findAllByUser_IdAndLabels_Id(Long userId, Long labelId);
 
+    /**
+     * Finds every note belonging to a specific user.
+     * Used by the Excel export service.
+     */
+    List<Note> findAllByUser_Id(Long userId);
+
+    /**
+     * Searches notes based on keyword, label, and status.
+     */
     @Query("""
         SELECT DISTINCT n
         FROM Note n
