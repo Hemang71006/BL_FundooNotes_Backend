@@ -7,13 +7,11 @@ package com.fundoonotes.service;
  * Date         : 14-11-2026
  *
  * Description:
- * Defines password recovery operations.
- * Supports requesting a reset link and setting a new password.
+ * Defines password recovery operations using Redis OTP verification.
  */
-
 public interface PasswordResetService {
 
     void requestPasswordReset(String email);
 
-    void resetPassword(String token, String newPassword);
+    void resetPassword(String email, String otp, String newPassword);
 }

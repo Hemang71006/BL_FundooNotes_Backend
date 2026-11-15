@@ -1,3 +1,4 @@
+
 package com.fundoonotes.security;
 
 import io.jsonwebtoken.Claims;
@@ -9,18 +10,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
+import java.time.Duration;
 import java.util.Date;
-
-/**
- * Project Name : Fundoo Notes Backend
- * Module       : Authentication - JWT Service
- * Author       : Hemang
- * Date         : 14-11-2026
- *
- * Description:
- * Generates and validates JSON Web Tokens.
- * Extracts user information and expiration details from tokens.
- */
 
 @Service
 public class JwtService {
@@ -50,7 +41,6 @@ public class JwtService {
 
     // Extracts the email stored inside the JWT token.
     public String extractEmail(String token) {
-
         return extractAllClaims(token).getSubject();
     }
 
@@ -61,6 +51,19 @@ public class JwtService {
 
         return extractedEmail.equals(email)
                 && !isTokenExpired(token);
+    }
+
+    // Returns the remaining validity of a JWT token.
+    public Duration getRemainingValidity(String token) {
+
+        Date expirationDate = extractAllClaims(token).getExpiration();
+
+        long remainingMilliseconds =
+                expirationDate.getTime() - System.currentTimeMillis();
+
+        return Duration.ofMillis(
+                Math.max(remainingMilliseconds, 0)
+        );
     }
 
     // Checks whether the token has expired.

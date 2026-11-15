@@ -7,10 +7,9 @@ package com.fundoonotes.service;
  * Date         : 14-11-2026
  *
  * Description:
- * Defines the operation used to send password recovery emails.
+ * Defines the operation used to send password recovery OTP emails.
  */
-
 public interface PasswordResetEmailService {
 
-    void sendPasswordResetEmail(String email, String resetLink);
+    void sendPasswordResetOtp(String email, String otp);
 }

@@ -1,8 +1,7 @@
 package com.fundoonotes.service.impl;
 
-import com.fundoonotes.entity.PasswordResetToken;
 import com.fundoonotes.entity.User;
-import com.fundoonotes.repository.PasswordResetTokenRepository;
+import com.fundoonotes.redis.RedisService;
 import com.fundoonotes.repository.UserRepository;
 import com.fundoonotes.service.PasswordResetEmailService;
 import com.fundoonotes.service.PasswordResetService;
@@ -14,150 +13,124 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.time.LocalDateTime;
-import java.util.Base64;
+import java.time.Duration;
 import java.util.Locale;
-
-/**
- * Project Name : Fundoo Notes Backend
- * Module       : Password Recovery - Service Implementation
- * Author       : Hemang
- * Date         : 14-11-2026
- *
- * Description:
- * Generates secure password reset tokens, sends reset links,
- * validates token expiry, and updates encrypted user passwords.
- */
 
 @Service
 @RequiredArgsConstructor
 public class PasswordResetServiceImpl implements PasswordResetService {
 
     private final UserRepository userRepository;
-    private final PasswordResetTokenRepository tokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final PasswordResetEmailService emailService;
+    private final RedisService redisService;
 
-    @Value("${app.password-reset.url}")
-    private String resetUrl;
+    private final SecureRandom secureRandom = new SecureRandom();
 
     @Value("${app.password-reset.expiration-minutes:15}")
     private long expirationMinutes;
-
-    private final SecureRandom secureRandom = new SecureRandom();
 
     @Override
     @Transactional
     public void requestPasswordReset(String email) {
 
-        String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
+        String normalizedEmail =
+                email.trim().toLowerCase(Locale.ROOT);
 
         User user = userRepository.findByEmail(normalizedEmail)
                 .orElse(null);
 
-        // Return normally even when the email does not exist.
-        // This prevents exposing which email addresses are registered.
+        // Do not reveal whether the email is registered.
         if (user == null) {
             return;
         }
 
-        // Remove previous reset tokens for this user.
-        tokenRepository.deleteAllByUser_Id(user.getId());
-
-        // Generate a cryptographically secure random token.
-        byte[] randomBytes = new byte[32];
-        secureRandom.nextBytes(randomBytes);
-
-        String rawToken = Base64.getUrlEncoder()
-                .withoutPadding()
-                .encodeToString(randomBytes);
-
-        // Store only the SHA-256 hash in the database.
-        PasswordResetToken resetToken = new PasswordResetToken();
-
-        resetToken.setTokenHash(hashToken(rawToken));
-        resetToken.setUser(user);
-        resetToken.setExpiresAt(
-                LocalDateTime.now().plusMinutes(expirationMinutes)
+        // Generate a secure six-digit OTP.
+        String otp = String.format(
+                Locale.ROOT,
+                "%06d",
+                secureRandom.nextInt(1_000_000)
         );
-        resetToken.setUsed(false);
 
-        tokenRepository.save(resetToken);
-
-        // Send the original token to the user's email.
-        String resetLink = resetUrl + "?token=" + rawToken;
-
-        emailService.sendPasswordResetEmail(
+        // Store the OTP in Redis with an expiry time.
+        redisService.storeOtp(
                 normalizedEmail,
-                resetLink
+                otp,
+                Duration.ofMinutes(expirationMinutes)
+        );
+
+        // Send the OTP to the registered email.
+        emailService.sendPasswordResetOtp(
+                normalizedEmail,
+                otp
         );
     }
 
     @Override
     @Transactional
-    public void resetPassword(String token, String newPassword) {
+    public void resetPassword(
+            String email,
+            String otp,
+            String newPassword) {
 
-        String tokenHash = hashToken(token);
+        String normalizedEmail =
+                email.trim().toLowerCase(Locale.ROOT);
 
-        PasswordResetToken resetToken =
-                tokenRepository.findByTokenHash(tokenHash)
-                        .orElseThrow(() -> new ResponseStatusException(
-                                HttpStatus.BAD_REQUEST,
-                                "Invalid or expired password reset token"
-                        ));
+        User user = userRepository.findByEmail(normalizedEmail)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Invalid or expired OTP"
+                ));
 
-        // Reject tokens that have already been used.
-        if (resetToken.isUsed()) {
+        String storedOtp = redisService.getOtp(normalizedEmail);
+
+        if (storedOtp == null) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Password reset token has already been used"
+                    "OTP has expired or does not exist"
             );
         }
 
-        // Reject expired tokens.
-        if (resetToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+        // Compare OTP values without ordinary string comparison.
+        boolean validOtp = MessageDigest.isEqual(
+                storedOtp.getBytes(StandardCharsets.UTF_8),
+                otp.getBytes(StandardCharsets.UTF_8)
+        );
+
+        if (!validOtp) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Password reset token has expired"
+                    "Invalid OTP"
             );
         }
 
-        User user = resetToken.getUser();
-
-        // Encrypt the new password before saving it.
+        // Encrypt and save the new password.
         user.setPassword(passwordEncoder.encode(newPassword));
 
         userRepository.save(user);
 
-        // Mark the token as used so it cannot be reused.
-        resetToken.setUsed(true);
+        // Delete the OTP only after the database transaction commits.
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
 
-        tokenRepository.save(resetToken);
-    }
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
 
-    // Converts the raw reset token into a SHA-256 hash.
-    private String hashToken(String token) {
-
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-
-            byte[] hash = digest.digest(
-                    token.getBytes(StandardCharsets.UTF_8)
+                        @Override
+                        public void afterCommit() {
+                            redisService.deleteOtp(normalizedEmail);
+                        }
+                    }
             );
 
-            return Base64.getEncoder().encodeToString(hash);
-
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException(
-                    "Unable to process password reset token",
-                    exception
-            );
+        } else {
+            redisService.deleteOtp(normalizedEmail);
         }
     }
 }

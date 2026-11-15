@@ -22,7 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fundoonotes.security.JwtService;
 import com.fundoonotes.repository.UserRepository;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import com.fundoonotes.redis.RedisService;
 
 /**
  * Project Name : Fundoo Notes Backend
@@ -44,6 +44,9 @@ class AuthControllerTest {
 
     @MockitoBean
     private AuthService authService;
+
+    @MockitoBean
+    private RedisService redisService;
 
     // Provides a mock JWT service for the JWT authentication filter.
     @MockitoBean

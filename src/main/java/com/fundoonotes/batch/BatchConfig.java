@@ -60,6 +60,9 @@ public class BatchConfig {
                 .reader(noteExcelReader)
                 .processor(noteItemProcessor)
                 .writer(noteItemWriter)
+                .faultTolerant()
+                .skip(IllegalArgumentException.class)
+                .skipLimit(100)
                 .build();
     }
 

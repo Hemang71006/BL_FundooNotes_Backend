@@ -1,30 +1,51 @@
-
 package com.fundoonotes.messaging;
 
+import com.fundoonotes.entity.User;
+import com.fundoonotes.repository.UserRepository;
+
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
+
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-
-/**
- * Project Name : Fundoo Notes Backend
- * Module       : JMS Messaging - Consumer Test
- * Author       : Hemang
- * Date         : 14-11-2026
- *
- * Description:
- * Tests the user registration JMS consumer.
- * Verifies that a registration message can be processed.
- */
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 class UserRegistrationJmsConsumerTest {
 
-    private final UserRegistrationJmsConsumer consumer =
-            new UserRegistrationJmsConsumer();
+    private UserRepository userRepository;
+    private JavaMailSender mailSender;
+
+    private UserRegistrationJmsConsumer consumer;
+
+    @BeforeEach
+    void setUp() {
+
+        userRepository = mock(UserRepository.class);
+        mailSender = mock(JavaMailSender.class);
+
+        consumer = new UserRegistrationJmsConsumer(
+                userRepository,
+                mailSender,
+                "noreply@example.com"
+        );
+    }
 
     @Test
-    void shouldProcessRegistrationMessage() {
+    void shouldSendWelcomeEmailForRegistrationMessage() {
+
+        User user = new User();
+        user.setId(10L);
+        user.setFirstName("Test");
+        user.setEmail("test@example.com");
+
+        when(userRepository.findById(10L))
+                .thenReturn(Optional.of(user));
 
         Map<String, Object> message = Map.of(
                 "userId", 10L,
@@ -35,5 +56,7 @@ class UserRegistrationJmsConsumerTest {
         assertDoesNotThrow(
                 () -> consumer.receiveRegistrationMessage(message)
         );
+
+        verify(mailSender).send(any(SimpleMailMessage.class));
     }
 }

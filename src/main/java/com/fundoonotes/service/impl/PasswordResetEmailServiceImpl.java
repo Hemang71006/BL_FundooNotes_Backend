@@ -9,16 +9,6 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
-/**
- * Project Name : Fundoo Notes Backend
- * Module       : Password Recovery - Email Service Implementation
- * Author       : Hemang
- * Date         : 14-11-2026
- *
- * Description:
- * Sends password reset links to registered users through email.
- */
-
 @Service
 @RequiredArgsConstructor
 public class PasswordResetEmailServiceImpl
@@ -29,24 +19,25 @@ public class PasswordResetEmailServiceImpl
     @Value("${app.mail.from}")
     private String fromEmail;
 
+    @Value("${app.password-reset.expiration-minutes:15}")
+    private long expirationMinutes;
+
     @Override
-    public void sendPasswordResetEmail(
-            String email,
-            String resetLink) {
+    public void sendPasswordResetOtp(String email, String otp) {
 
         SimpleMailMessage message = new SimpleMailMessage();
 
         message.setFrom(fromEmail);
         message.setTo(email);
-        message.setSubject("Fundoo Notes - Password Reset");
+        message.setSubject("Fundoo Notes - Password Reset OTP");
 
         message.setText(
                 "Hello,\n\n" +
                         "We received a request to reset your Fundoo Notes password.\n\n" +
-                        "Use the link below to reset your password:\n" +
-                        resetLink + "\n\n" +
-                        "This link expires in 15 minutes.\n\n" +
-                        "If you did not request this reset, you can ignore this email.\n\n" +
+                        "Your password reset OTP is: " + otp + "\n\n" +
+                        "This OTP expires in " + expirationMinutes + " minutes.\n\n" +
+                        "Do not share this OTP with anyone.\n\n" +
+                        "If you did not request this reset, please ignore this email.\n\n" +
                         "Regards,\nFundoo Notes Team"
         );
 

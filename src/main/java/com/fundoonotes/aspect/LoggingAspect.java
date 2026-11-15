@@ -94,14 +94,17 @@ public class LoggingAspect {
             JoinPoint joinPoint,
             Throwable exception) {
 
+        String className =
+                joinPoint.getSignature().getDeclaringTypeName();
+
         String methodName =
                 joinPoint.getSignature().getName();
 
         logger.error(
-                "Exception in method: {}. Error: {}",
+                "Exception in method: {}.{} - exception type: {}",
+                className,
                 methodName,
-                exception.getMessage(),
-                exception
+                exception.getClass().getSimpleName()
         );
     }
 }

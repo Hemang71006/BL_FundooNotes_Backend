@@ -2,6 +2,7 @@
 package com.fundoonotes.security;
 
 import com.fundoonotes.entity.User;
+import com.fundoonotes.redis.RedisService;
 import com.fundoonotes.repository.UserRepository;
 
 import jakarta.servlet.FilterChain;
@@ -37,11 +38,14 @@ import static org.mockito.Mockito.when;
  *
  * Description:
  * Tests JWT authentication filter behavior.
- * Verifies missing tokens, valid tokens, and invalid tokens.
+ * Verifies missing tokens, valid tokens, invalid tokens,
+ * and malformed tokens.
  */
-
 @ExtendWith(MockitoExtension.class)
 class JwtAuthenticationFilterTest {
+
+    @Mock
+    private RedisService redisService;
 
     @Mock
     private JwtService jwtService;
@@ -75,7 +79,8 @@ class JwtAuthenticationFilterTest {
         jwtAuthenticationFilter.doFilter(request, response, filterChain);
 
         assertNull(SecurityContextHolder.getContext().getAuthentication());
-        verifyNoInteractions(jwtService, userRepository);
+
+        verifyNoInteractions(jwtService, userRepository, redisService);
     }
 
     @Test
@@ -88,6 +93,7 @@ class JwtAuthenticationFilterTest {
         user.setEmail(email);
         user.setPassword("encoded-password");
 
+        when(redisService.isTokenBlacklisted(token)).thenReturn(false);
         when(jwtService.extractEmail(token)).thenReturn(email);
         when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
         when(jwtService.isTokenValid(token, email)).thenReturn(true);
@@ -109,6 +115,7 @@ class JwtAuthenticationFilterTest {
         assertNotNull(authentication);
         assertTrue(authentication.isAuthenticated());
 
+        verify(redisService).isTokenBlacklisted(token);
         verify(jwtService).extractEmail(token);
         verify(userRepository).findByEmail(email);
         verify(jwtService).isTokenValid(token, email);
@@ -124,6 +131,7 @@ class JwtAuthenticationFilterTest {
         user.setEmail(email);
         user.setPassword("encoded-password");
 
+        when(redisService.isTokenBlacklisted(token)).thenReturn(false);
         when(jwtService.extractEmail(token)).thenReturn(email);
         when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
         when(jwtService.isTokenValid(token, email)).thenReturn(false);
@@ -140,6 +148,8 @@ class JwtAuthenticationFilterTest {
         jwtAuthenticationFilter.doFilter(request, response, filterChain);
 
         assertNull(SecurityContextHolder.getContext().getAuthentication());
+
+        verify(redisService).isTokenBlacklisted(token);
     }
 
     @Test
@@ -147,6 +157,7 @@ class JwtAuthenticationFilterTest {
 
         String token = "malformed-test-token";
 
+        when(redisService.isTokenBlacklisted(token)).thenReturn(false);
         when(jwtService.extractEmail(token))
                 .thenThrow(new IllegalArgumentException("Invalid token"));
 
@@ -156,11 +167,14 @@ class JwtAuthenticationFilterTest {
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         FilterChain filterChain = (servletRequest, servletResponse) -> {
-            // Confirms that the request continues after the invalid token is ignored.
+            // Confirms that the filter chain continues after the invalid token is ignored.
         };
 
         jwtAuthenticationFilter.doFilter(request, response, filterChain);
 
         assertNull(SecurityContextHolder.getContext().getAuthentication());
+
+        verify(redisService).isTokenBlacklisted(token);
+        verify(jwtService).extractEmail(token);
     }
 }

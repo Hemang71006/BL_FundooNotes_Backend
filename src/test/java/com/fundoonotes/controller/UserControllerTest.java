@@ -24,7 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fundoonotes.security.JwtService;
 import com.fundoonotes.repository.UserRepository;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import com.fundoonotes.redis.RedisService;
 /**
  * Project Name : Fundoo Notes Backend
  * Module       : User Management - Controller Test
@@ -46,6 +46,9 @@ class UserControllerTest {
     // Converts Java objects into JSON request bodies.
     @Autowired
     private ObjectMapper objectMapper;
+
+    @MockitoBean
+    private RedisService redisService;
 
     // Mocks the service because this test focuses only on the controller.
     @MockitoBean
