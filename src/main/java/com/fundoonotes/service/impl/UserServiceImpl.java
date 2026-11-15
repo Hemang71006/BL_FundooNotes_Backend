@@ -12,6 +12,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Project Name : Fundoo Notes Backend
@@ -29,6 +31,8 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
 
+    private static final Logger logger =
+            LoggerFactory.getLogger(UserServiceImpl.class);
     // Lombok generates a constructor to inject these dependencies.
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -41,8 +45,10 @@ public class UserServiceImpl implements UserService {
         // Remove extra spaces and convert email to lowercase.
         String email = request.getEmail().trim().toLowerCase();
 
+        logger.info("Processing new user registration");
         // Stop registration if the email is already present in the database.
         if (userRepository.existsByEmail(email)) {
+            logger.warn("Registration rejected because email is already registered");
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Email is already registered"
@@ -64,6 +70,11 @@ public class UserServiceImpl implements UserService {
 
         // Save the user in the database.
         User savedUser = userRepository.save(user);
+
+        logger.info(
+                "User registration successful: userId={}",
+                savedUser.getId()
+        );
 
         // Return user details without exposing the password.
         return new UserResponse(
