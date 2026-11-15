@@ -21,6 +21,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Project Name : Fundoo Notes Backend
@@ -37,6 +39,9 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger logger =
+            LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     // Handles validation errors from @Valid request DTOs.
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -112,6 +117,13 @@ public class GlobalExceptionHandler {
                 ? exception.getReason()
                 : "Request could not be processed";
 
+        logger.warn(
+                "Request rejected: status={}, path={}, reason={}",
+                exception.getStatusCode().value(),
+                request.getRequestURI(),
+                exception.getReason()
+        );
+
         return createErrorResponse(
                 statusCode,
                 message,
@@ -154,6 +166,12 @@ public class GlobalExceptionHandler {
             DataIntegrityViolationException exception,
             HttpServletRequest request) {
 
+        logger.warn(
+                "Database conflict occurred for path={}",
+                request.getRequestURI(),
+                exception
+        );
+
         return createErrorResponse(
                 HttpStatus.CONFLICT,
                 "The request conflicts with existing data",
@@ -167,6 +185,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleGlobalException(
             Exception exception,
             HttpServletRequest request) {
+
+        logger.error(
+                "Unexpected exception occurred while processing path={}",
+                request.getRequestURI(),
+                exception
+        );
 
         return createErrorResponse(
                 HttpStatus.INTERNAL_SERVER_ERROR,

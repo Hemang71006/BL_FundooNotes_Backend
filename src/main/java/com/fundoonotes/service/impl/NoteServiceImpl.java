@@ -17,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Project Name : Fundoo Notes Backend
@@ -34,6 +36,8 @@ import java.util.List;
 @Transactional
 public class NoteServiceImpl implements NoteService {
 
+    private static final Logger logger =
+            LoggerFactory.getLogger(NoteServiceImpl.class);
     private final NoteRepository noteRepository;
     private final UserRepository userRepository;
 
@@ -41,6 +45,7 @@ public class NoteServiceImpl implements NoteService {
     @Override
     public NoteResponse createNote(NoteRequest request, String email) {
 
+        logger.info("Creating a new note");
         User user = findUserByEmail(email);
 
         Note note = new Note();
@@ -58,6 +63,7 @@ public class NoteServiceImpl implements NoteService {
     @Transactional(readOnly = true)
     public List<NoteResponse> getAllNotes(String email) {
 
+        logger.debug("Retrieving active notes");
         User user = findUserByEmail(email);
 
         return noteRepository
@@ -110,6 +116,7 @@ public class NoteServiceImpl implements NoteService {
     @Override
     public NoteResponse updateNote(Long noteId, NoteRequest request, String email) {
 
+        logger.info("Updating note with id={}", noteId);
         User user = findUserByEmail(email);
         Note note = findNoteByIdAndUser(noteId, user.getId());
 
@@ -132,6 +139,7 @@ public class NoteServiceImpl implements NoteService {
     @Override
     public void deleteNote(Long noteId, String email) {
 
+        logger.info("Permanently deleting note with id={}", noteId);
         User user = findUserByEmail(email);
         Note note = findNoteByIdAndUser(noteId, user.getId());
 
@@ -142,6 +150,7 @@ public class NoteServiceImpl implements NoteService {
     @Override
     public NoteResponse pinNote(Long noteId, String email) {
 
+        logger.info("Pinning note with id={}", noteId);
         Note note = getNoteForStatusChange(noteId, email);
         note.setPinned(true);
 
@@ -162,6 +171,7 @@ public class NoteServiceImpl implements NoteService {
     @Override
     public NoteResponse archiveNote(Long noteId, String email) {
 
+        logger.info("Archiving note with id={}", noteId);
         Note note = getNoteForStatusChange(noteId, email);
         note.setArchived(true);
 
@@ -182,6 +192,7 @@ public class NoteServiceImpl implements NoteService {
     @Override
     public NoteResponse trashNote(Long noteId, String email) {
 
+        logger.info("Moving note to trash with id={}", noteId);
         Note note = findNoteForUser(noteId, email);
         note.setTrashed(true);
 
@@ -192,6 +203,7 @@ public class NoteServiceImpl implements NoteService {
     @Override
     public NoteResponse restoreNote(Long noteId, String email) {
 
+        logger.info("Restoring note with id={}", noteId);
         Note note = findNoteForUser(noteId, email);
         note.setTrashed(false);
 
