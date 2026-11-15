@@ -122,6 +122,11 @@
 			<artifactId>activemq-broker</artifactId>
 			<scope>runtime</scope>
 		</dependency>
+		<!-- RabbitMQ Messaging with Spring AMQP -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-amqp</artifactId>
+		</dependency>
 	</dependencies>
 
 	<build>
