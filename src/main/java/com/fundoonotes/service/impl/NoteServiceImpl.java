@@ -17,8 +17,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
 
 /**
  * Project Name : Fundoo Notes Backend
@@ -29,6 +33,7 @@ import org.slf4j.LoggerFactory;
  * Description:
  * Implements note management business operations.
  * Ensures users can access and modify only their own notes.
+ * Uses Redis caching to improve note retrieval performance.
  */
 
 @Service
@@ -38,14 +43,20 @@ public class NoteServiceImpl implements NoteService {
 
     private static final Logger logger =
             LoggerFactory.getLogger(NoteServiceImpl.class);
+
     private final NoteRepository noteRepository;
     private final UserRepository userRepository;
 
-    // Creates a new note for the authenticated user.
+    // Creates a new note and clears cached note data after successful creation.
+    @CacheEvict(
+            cacheNames = {"activeNotes", "archivedNotes", "trashedNotes", "noteById"},
+            allEntries = true
+    )
     @Override
     public NoteResponse createNote(NoteRequest request, String email) {
 
         logger.info("Creating a new note");
+
         User user = findUserByEmail(email);
 
         Note note = new Note();
@@ -58,12 +69,14 @@ public class NoteServiceImpl implements NoteService {
         return mapToResponse(savedNote);
     }
 
-    // Retrieves active notes belonging to the authenticated user.
+    // Caches active notes separately for each authenticated user.
+    @Cacheable(cacheNames = "activeNotes", key = "#p0")
     @Override
     @Transactional(readOnly = true)
     public List<NoteResponse> getAllNotes(String email) {
 
         logger.debug("Retrieving active notes");
+
         User user = findUserByEmail(email);
 
         return noteRepository
@@ -73,7 +86,8 @@ public class NoteServiceImpl implements NoteService {
                 .toList();
     }
 
-    // Retrieves archived notes belonging to the authenticated user.
+    // Caches archived notes separately for each authenticated user.
+    @Cacheable(cacheNames = "archivedNotes", key = "#p0")
     @Override
     @Transactional(readOnly = true)
     public List<NoteResponse> getArchivedNotes(String email) {
@@ -87,7 +101,8 @@ public class NoteServiceImpl implements NoteService {
                 .toList();
     }
 
-    // Retrieves trashed notes belonging to the authenticated user.
+    // Caches trashed notes separately for each authenticated user.
+    @Cacheable(cacheNames = "trashedNotes", key = "#p0")
     @Override
     @Transactional(readOnly = true)
     public List<NoteResponse> getTrashedNotes(String email) {
@@ -101,7 +116,8 @@ public class NoteServiceImpl implements NoteService {
                 .toList();
     }
 
-    // Retrieves a note only if it belongs to the authenticated user.
+    // Caches an individual note using its ID and owner's email.
+    @Cacheable(cacheNames = "noteById", key = "#p0 + ':' + #p1")
     @Override
     @Transactional(readOnly = true)
     public NoteResponse getNoteById(Long noteId, String email) {
@@ -112,11 +128,16 @@ public class NoteServiceImpl implements NoteService {
         return mapToResponse(note);
     }
 
-    // Updates the title and description of an existing note.
+    // Updates a note and clears all cached note data.
+    @CacheEvict(
+            cacheNames = {"activeNotes", "archivedNotes", "trashedNotes", "noteById"},
+            allEntries = true
+    )
     @Override
     public NoteResponse updateNote(Long noteId, NoteRequest request, String email) {
 
         logger.info("Updating note with id={}", noteId);
+
         User user = findUserByEmail(email);
         Note note = findNoteByIdAndUser(noteId, user.getId());
 
@@ -135,29 +156,43 @@ public class NoteServiceImpl implements NoteService {
         return mapToResponse(updatedNote);
     }
 
-    // Permanently deletes a note owned by the authenticated user.
+    // Permanently deletes a note and clears cached note data.
+    @CacheEvict(
+            cacheNames = {"activeNotes", "archivedNotes", "trashedNotes", "noteById"},
+            allEntries = true
+    )
     @Override
     public void deleteNote(Long noteId, String email) {
 
         logger.info("Permanently deleting note with id={}", noteId);
+
         User user = findUserByEmail(email);
         Note note = findNoteByIdAndUser(noteId, user.getId());
 
         noteRepository.delete(note);
     }
 
-    // Pins a note.
+    // Pins a note and clears cached note data.
+    @CacheEvict(
+            cacheNames = {"activeNotes", "archivedNotes", "trashedNotes", "noteById"},
+            allEntries = true
+    )
     @Override
     public NoteResponse pinNote(Long noteId, String email) {
 
         logger.info("Pinning note with id={}", noteId);
+
         Note note = getNoteForStatusChange(noteId, email);
         note.setPinned(true);
 
         return mapToResponse(noteRepository.save(note));
     }
 
-    // Unpins a note.
+    // Unpins a note and clears cached note data.
+    @CacheEvict(
+            cacheNames = {"activeNotes", "archivedNotes", "trashedNotes", "noteById"},
+            allEntries = true
+    )
     @Override
     public NoteResponse unpinNote(Long noteId, String email) {
 
@@ -167,18 +202,27 @@ public class NoteServiceImpl implements NoteService {
         return mapToResponse(noteRepository.save(note));
     }
 
-    // Archives a note.
+    // Archives a note and clears cached note data.
+    @CacheEvict(
+            cacheNames = {"activeNotes", "archivedNotes", "trashedNotes", "noteById"},
+            allEntries = true
+    )
     @Override
     public NoteResponse archiveNote(Long noteId, String email) {
 
         logger.info("Archiving note with id={}", noteId);
+
         Note note = getNoteForStatusChange(noteId, email);
         note.setArchived(true);
 
         return mapToResponse(noteRepository.save(note));
     }
 
-    // Removes a note from the archive.
+    // Unarchives a note and clears cached note data.
+    @CacheEvict(
+            cacheNames = {"activeNotes", "archivedNotes", "trashedNotes", "noteById"},
+            allEntries = true
+    )
     @Override
     public NoteResponse unarchiveNote(Long noteId, String email) {
 
@@ -188,22 +232,32 @@ public class NoteServiceImpl implements NoteService {
         return mapToResponse(noteRepository.save(note));
     }
 
-    // Moves a note into the trash without permanently deleting it.
+    // Moves a note to trash and clears cached note data.
+    @CacheEvict(
+            cacheNames = {"activeNotes", "archivedNotes", "trashedNotes", "noteById"},
+            allEntries = true
+    )
     @Override
     public NoteResponse trashNote(Long noteId, String email) {
 
         logger.info("Moving note to trash with id={}", noteId);
+
         Note note = findNoteForUser(noteId, email);
         note.setTrashed(true);
 
         return mapToResponse(noteRepository.save(note));
     }
 
-    // Restores a note from the trash.
+    // Restores a note from trash and clears cached note data.
+    @CacheEvict(
+            cacheNames = {"activeNotes", "archivedNotes", "trashedNotes", "noteById"},
+            allEntries = true
+    )
     @Override
     public NoteResponse restoreNote(Long noteId, String email) {
 
         logger.info("Restoring note with id={}", noteId);
+
         Note note = findNoteForUser(noteId, email);
         note.setTrashed(false);
 
