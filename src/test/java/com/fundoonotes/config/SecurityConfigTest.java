@@ -24,7 +24,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import com.fundoonotes.redis.RedisService;
 
@@ -92,5 +94,23 @@ class SecurityConfigTest {
 
         mockMvc.perform(get("/api/notes"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void corsPreflightShouldBeAllowedForConfiguredFrontend() throws Exception {
+
+        mockMvc.perform(options("/api/notes")
+                        .header("Origin", "http://localhost:5173")
+                        .header("Access-Control-Request-Method", "GET")
+                        .header("Access-Control-Request-Headers", "Authorization,Content-Type"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(
+                        "Access-Control-Allow-Origin",
+                        "http://localhost:5173"
+                ))
+                .andExpect(header().string(
+                        "Access-Control-Allow-Credentials",
+                        org.hamcrest.Matchers.nullValue()
+                ));
     }
 }
