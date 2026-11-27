@@ -10,7 +10,7 @@ The project is divided into two parts, covering core Spring Boot backend develop
 
 ## Project Overview
 
-Fundoo Notes Backend provides REST APIs for user management, authentication, note management, labels, password recovery, exception handling, application logging, messaging, caching, batch processing, and advanced architecture integration.
+Fundoo Notes Backend provides REST APIs for user management, authentication, note management, labels, password recovery, exception handling, application logging, messaging, caching, batch processing, owner-scoped reminders, CORS-controlled frontend access, and advanced architecture integration.
 
 The application follows a layered architecture to maintain separation of concerns, readability, maintainability, and scalability.
 
@@ -31,9 +31,9 @@ Part 1 consists of the following eight feature modules:
 
 ## Part 2 – Advanced Spring Boot Concepts
 
-Part 2 extends the application with messaging systems, caching, batch processing, aspect-oriented programming, and advanced architecture integration.
+Part 2 extends the application with messaging systems, caching, batch processing, aspect-oriented programming, frontend access control, reminders, and advanced architecture integration.
 
-It consists of the following seven feature modules:
+It consists of the following nine feature modules:
 
 | Feature | Feature Name | Description |
 |---|---|---|
@@ -44,6 +44,8 @@ It consists of the following seven feature modules:
 | 13 | Spring Batch & Excel Processing | Introduces batch processing for handling large datasets and Excel-based data import/export operations. |
 | 14 | Aspect-Oriented Programming (AOP) | Implements aspects, pointcuts, and advice for cross-cutting concerns such as logging, monitoring, and execution tracking. |
 | 15 | Advanced Architecture Integration | Integrates and verifies the advanced components, strengthens cross-feature communication, and explores Spring Cloud and distributed architecture concepts. |
+| 16 | CORS Configuration | Restricts browser access to the configured React frontend origin without weakening JWT protection. |
+| 17 | Reminder Integration | Adds owner-scoped note reminders with `Asia/Kolkata` validation, RabbitMQ wake-ups, and MySQL-backed recovery. |
 
 ### Part 2 – Key Concepts
 
@@ -53,6 +55,8 @@ It consists of the following seven feature modules:
 - Cache management, eviction, and consistency.
 - Batch jobs and Excel processing workflows.
 - Cross-cutting concerns using Spring AOP.
+- Origin-based CORS configuration for the React frontend.
+- Owner-scoped reminders with RabbitMQ wake-ups and database-backed recovery.
 - Integration testing across multiple application components.
 - Spring Cloud concepts and advanced application architecture.
 
@@ -70,7 +74,9 @@ It consists of the following seven feature modules:
 | Authentication | JSON Web Token (JWT) |
 | Password Security | Password Encoding |
 | Validation | Jakarta Bean Validation |
+| Frontend Access | CORS |
 | Messaging | JMS, ActiveMQ, RabbitMQ |
+| Scheduling | Spring Scheduler |
 | In-memory Data Store | Redis |
 | Caching | Spring Cache |
 | Batch Processing | Spring Batch |
@@ -119,6 +125,8 @@ The application follows a layered architecture with supporting components for se
 - **Redis Integration:** Supports token management and temporary data storage.
 - **Caching:** Reduces repeated database operations.
 - **Messaging:** Supports asynchronous communication using JMS and RabbitMQ.
+- **CORS Configuration:** Restricts browser access to the configured frontend origin.
+- **Reminder Components:** Persist reminders, publish RabbitMQ wake-ups, and recover due reminders from MySQL.
 - **Spring Batch:** Handles batch-oriented processing and Excel workflows.
 - **AOP:** Manages cross-cutting concerns such as logging and monitoring.
 - **Exception Handler:** Handles application exceptions centrally.
@@ -137,6 +145,7 @@ fundoo-notes-backend/
 │   │   │   ├── controller/
 │   │   │   ├── dto/
 │   │   │   ├── entity/
+│   │   │   ├── event/
 │   │   │   ├── exception/
 │   │   │   ├── repository/
 │   │   │   ├── security/
@@ -146,6 +155,8 @@ fundoo-notes-backend/
 │   │   │   ├── cache/
 │   │   │   ├── batch/
 │   │   │   ├── aspect/
+│   │   │   ├── util/
+│   │   │   ├── validation/
 │   │   │   └── FundooNotesBackendApplication.java
 │   │   │
 │   │   └── resources/
@@ -190,12 +201,17 @@ Configure the required connection details for:
 - Redis server.
 - RabbitMQ broker.
 - JMS provider.
-- Mail server for password recovery.
-- JWT secret and token configuration.
+- Mail server for password recovery and reminders.
+- JWT secret and token configuration through `JWT_SECRET` (no default).
+- Frontend origin used by CORS, `http://localhost:5173` by default.
+- Password reset frontend URL through `PASSWORD_RESET_URL`, `http://localhost:5173` by default.
+- Reminder poll interval and `MAIL_FROM` sender address.
 
 Do not commit actual database passwords, mail credentials, JWT secrets, or other sensitive values to the repository.
 
 Use environment variables or an appropriate external configuration mechanism to manage sensitive information.
+
+Reminder times are interpreted in `Asia/Kolkata`. SMTP acceptance and the database status update are not atomic, so duplicate reminder emails are possible after an ambiguous SMTP failure.
 
 ## Running the Application
 
@@ -231,6 +247,12 @@ Execute the complete test suite:
 
 ```bash
 mvn clean test
+```
+
+For full verification, including packaging:
+
+```bash
+mvn clean verify
 ```
 
 To build the project and verify that tests pass:
@@ -275,7 +297,9 @@ develop
   ├── feature/12-caching-implementation
   ├── feature/13-spring-batch-excel
   ├── feature/14-aop-implementation
-  └── feature/15-advanced-architecture-integration
+  ├── feature/15-advanced-architecture-integration
+  ├── feature/16-cors-configuration
+  └── feature/17-reminder-integration
 ```
 
 Each feature is developed and tested independently before being integrated into the `develop` branch.
@@ -314,6 +338,8 @@ Each feature is developed and tested independently before being integrated into 
 - Processing Excel files using Apache POI.
 - Understanding AOP, aspects, pointcuts, and advice.
 - Implementing cross-cutting concerns.
+- Configuring origin-based CORS for a React frontend.
+- Implementing owner-scoped reminders with RabbitMQ wake-ups and database-backed recovery.
 - Understanding Spring Cloud and distributed application architecture.
 - Integrating and testing multiple application components.
 
