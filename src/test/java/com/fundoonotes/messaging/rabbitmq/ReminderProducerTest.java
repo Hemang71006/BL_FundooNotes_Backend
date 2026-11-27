@@ -2,7 +2,6 @@
 package com.fundoonotes.messaging.rabbitmq;
 
 import com.fundoonotes.event.ReminderEvent;
-import java.time.LocalDateTime;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,16 +45,7 @@ class ReminderProducerTest {
     @Test
     void shouldPublishReminderEvent() {
 
-        LocalDateTime reminderAt =
-                LocalDateTime.of(2026, 11, 20, 10, 30);
-
-        ReminderEvent event = new ReminderEvent(
-                15L,
-                5L,
-                "test@example.com",
-                "Test Note",
-                reminderAt
-        );
+        ReminderEvent event = new ReminderEvent(25L);
 
         reminderProducer.publishReminder(event);
 
@@ -70,14 +60,7 @@ class ReminderProducerTest {
 
         Map<?, ?> message = (Map<?, ?>) captor.getValue();
 
-        assertEquals(15L, message.get("noteId"));
-        assertEquals(5L, message.get("userId"));
-        assertEquals("test@example.com", message.get("userEmail"));
-        assertEquals("Test Note", message.get("noteTitle"));
-        assertEquals(
-                reminderAt.toString(),
-                message.get("reminderAt")
-        );
+        assertEquals(25L, message.get("reminderId"));
         assertEquals("REMINDER_REQUESTED", message.get("eventType"));
     }
 }

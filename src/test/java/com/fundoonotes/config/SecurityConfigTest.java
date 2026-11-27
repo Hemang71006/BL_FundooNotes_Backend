@@ -97,6 +97,13 @@ class SecurityConfigTest {
     }
 
     @Test
+    void reminderEndpointsShouldRequireAuthentication() throws Exception {
+
+        mockMvc.perform(get("/api/notes/reminders"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void corsPreflightShouldBeAllowedForConfiguredFrontend() throws Exception {
 
         mockMvc.perform(options("/api/notes")

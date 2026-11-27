@@ -3,9 +3,12 @@ package com.fundoonotes.service.impl;
 
 import com.fundoonotes.dto.request.ReminderRequest;
 import com.fundoonotes.entity.Note;
+import com.fundoonotes.entity.Reminder;
+import com.fundoonotes.entity.ReminderStatus;
 import com.fundoonotes.entity.User;
 import com.fundoonotes.event.ReminderEvent;
 import com.fundoonotes.repository.NoteRepository;
+import com.fundoonotes.repository.ReminderRepository;
 import com.fundoonotes.repository.UserRepository;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -45,6 +48,9 @@ class ReminderServiceImplTest {
     private UserRepository userRepository;
 
     @Mock
+    private ReminderRepository reminderRepository;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     private ReminderServiceImpl reminderService;
@@ -58,6 +64,7 @@ class ReminderServiceImplTest {
         reminderService = new ReminderServiceImpl(
                 noteRepository,
                 userRepository,
+                reminderRepository,
                 eventPublisher
         );
 
@@ -69,6 +76,7 @@ class ReminderServiceImplTest {
         note.setId(15L);
         note.setTitle("Test Note");
         note.setTrashed(false);
+        note.setUser(user);
     }
 
     @Test
@@ -82,27 +90,32 @@ class ReminderServiceImplTest {
         when(userRepository.findByEmail("test@example.com"))
                 .thenReturn(Optional.of(user));
 
-        when(noteRepository.findByIdAndUser_Id(15L, 5L))
+        when(noteRepository.findByIdAndUser_IdForUpdate(15L, 5L))
                 .thenReturn(Optional.of(note));
 
-        reminderService.requestReminder(
+        when(reminderRepository.saveAndFlush(any(Reminder.class)))
+                .thenAnswer(invocation -> {
+                    Reminder savedReminder = invocation.getArgument(0);
+                    savedReminder.setId(25L);
+                    return savedReminder;
+                });
+
+        reminderService.createReminder(
                 15L,
                 request,
                 "test@example.com"
         );
 
+        ArgumentCaptor<Reminder> reminderCaptor =
+                ArgumentCaptor.forClass(Reminder.class);
+        verify(reminderRepository).saveAndFlush(reminderCaptor.capture());
+        assertEquals(15L, reminderCaptor.getValue().getNote().getId());
+        assertEquals(5L, reminderCaptor.getValue().getUser().getId());
+
         ArgumentCaptor<ReminderEvent> captor =
                 ArgumentCaptor.forClass(ReminderEvent.class);
-
         verify(eventPublisher).publishEvent(captor.capture());
-
-        ReminderEvent event = captor.getValue();
-
-        assertEquals(15L, event.noteId());
-        assertEquals(5L, event.userId());
-        assertEquals("test@example.com", event.userEmail());
-        assertEquals("Test Note", event.noteTitle());
-        assertEquals(reminderAt, event.reminderAt());
+        assertEquals(25L, captor.getValue().reminderId());
     }
 
     @Test
@@ -116,7 +129,7 @@ class ReminderServiceImplTest {
 
         assertThrows(
                 ResponseStatusException.class,
-                () -> reminderService.requestReminder(
+                () -> reminderService.createReminder(
                         15L,
                         request,
                         "unknown@example.com"
@@ -135,12 +148,12 @@ class ReminderServiceImplTest {
         when(userRepository.findByEmail("test@example.com"))
                 .thenReturn(Optional.of(user));
 
-        when(noteRepository.findByIdAndUser_Id(15L, 5L))
+        when(noteRepository.findByIdAndUser_IdForUpdate(15L, 5L))
                 .thenReturn(Optional.empty());
 
         assertThrows(
                 ResponseStatusException.class,
-                () -> reminderService.requestReminder(
+                () -> reminderService.createReminder(
                         15L,
                         request,
                         "test@example.com"
@@ -161,12 +174,12 @@ class ReminderServiceImplTest {
         when(userRepository.findByEmail("test@example.com"))
                 .thenReturn(Optional.of(user));
 
-        when(noteRepository.findByIdAndUser_Id(15L, 5L))
+        when(noteRepository.findByIdAndUser_IdForUpdate(15L, 5L))
                 .thenReturn(Optional.of(note));
 
         assertThrows(
                 ResponseStatusException.class,
-                () -> reminderService.requestReminder(
+                () -> reminderService.createReminder(
                         15L,
                         request,
                         "test@example.com"
@@ -185,12 +198,12 @@ class ReminderServiceImplTest {
         when(userRepository.findByEmail("test@example.com"))
                 .thenReturn(Optional.of(user));
 
-        when(noteRepository.findByIdAndUser_Id(15L, 5L))
+        when(noteRepository.findByIdAndUser_IdForUpdate(15L, 5L))
                 .thenReturn(Optional.of(note));
 
         assertThrows(
                 ResponseStatusException.class,
-                () -> reminderService.requestReminder(
+                () -> reminderService.createReminder(
                         15L,
                         request,
                         "test@example.com"
@@ -198,5 +211,48 @@ class ReminderServiceImplTest {
         );
 
         verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void shouldRescheduleFailedReminderForItsOwner() {
+
+        Reminder reminder = new Reminder();
+        reminder.setId(25L);
+        reminder.setNote(note);
+        reminder.setUser(user);
+        reminder.setStatus(ReminderStatus.FAILED);
+        reminder.setRetryCount(5);
+
+        when(userRepository.findByEmail("test@example.com"))
+                .thenReturn(Optional.of(user));
+        when(reminderRepository.lockByIdAndUser_Id(25L, 5L))
+                .thenReturn(Optional.of(reminder));
+        when(reminderRepository.save(any(Reminder.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ReminderRequest request = new ReminderRequest();
+        request.setReminderAt(LocalDateTime.now().plusDays(1));
+
+        reminderService.updateReminder(25L, request, "test@example.com");
+
+        assertEquals(ReminderStatus.PENDING, reminder.getStatus());
+        assertEquals(0, reminder.getRetryCount());
+        verify(eventPublisher).publishEvent(new ReminderEvent(25L));
+    }
+
+    @Test
+    void shouldNotAllowAnotherUserToManageReminder() {
+
+        when(userRepository.findByEmail("test@example.com"))
+                .thenReturn(Optional.of(user));
+        when(reminderRepository.lockByIdAndUser_Id(25L, 5L))
+                .thenReturn(Optional.empty());
+
+        assertThrows(
+                ResponseStatusException.class,
+                () -> reminderService.cancelReminder(25L, "test@example.com")
+        );
+
+        verify(reminderRepository, never()).save(any(Reminder.class));
     }
 }

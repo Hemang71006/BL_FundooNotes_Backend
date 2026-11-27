@@ -1,11 +1,13 @@
 package com.fundoonotes.repository;
 
 import com.fundoonotes.entity.Note;
+import jakarta.persistence.LockModeType;
 
 import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -26,6 +28,17 @@ public interface NoteRepository extends JpaRepository<Note, Long> {
      * Finds a note using its ID and owner ID.
      */
     Optional<Note> findByIdAndUser_Id(Long id, Long userId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT n
+            FROM Note n
+            WHERE n.id = :noteId AND n.user.id = :userId
+            """)
+    Optional<Note> findByIdAndUser_IdForUpdate(
+            @Param("noteId") Long noteId,
+            @Param("userId") Long userId
+    );
 
     /**
      * Finds all active notes belonging to a user.
