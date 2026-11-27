@@ -1,27 +1,27 @@
-
 package com.fundoonotes.cache;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-
-import java.util.UUID;
+import com.fundoonotes.dto.response.NoteResponse;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
+import org.springframework.data.redis.cache.RedisCacheManager;
 
-/**
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+/*
  * Project Name : Fundoo Notes Backend
- * Module       : Redis Cache Integration Testing
+ * Description  : Verifies immediate writes, serialization and eviction in Redis.
  * Author       : Hemang
- * Date         : 14-11-2026
- *
- * Description:
- * Tests Redis cache storage, retrieval, and eviction.
- * Verifies that the configured CacheManager works correctly.
+ * Date         : 27-11-2026
  */
 @SpringBootTest
 class RedisCacheIntegrationTest {
@@ -29,10 +29,12 @@ class RedisCacheIntegrationTest {
     @Autowired
     private CacheManager cacheManager;
 
-    /**
-     * Verifies that a value can be stored and retrieved
-     * from the configured Redis cache.
-     */
+    @Test
+    void shouldInjectConfiguredRedisCacheManager() {
+
+        assertInstanceOf(RedisCacheManager.class, cacheManager);
+    }
+
     @Test
     void shouldStoreAndRetrieveCachedValue() {
 
@@ -55,10 +57,42 @@ class RedisCacheIntegrationTest {
         }
     }
 
-    /**
-     * Verifies that a cached value can be removed
-     * successfully from Redis.
-     */
+    @Test
+    void shouldSerializeAndDeserializeResponseThroughRealCache() {
+
+        Cache cache = cacheManager.getCache("noteById");
+
+        assertNotNull(cache);
+
+        String key = "cache-test:" + UUID.randomUUID();
+        LocalDateTime now = LocalDateTime.of(2026, 11, 27, 10, 30);
+        NoteResponse note = new NoteResponse(
+                42L,
+                "Cached note",
+                "Cached description",
+                true,
+                false,
+                false,
+                now,
+                now
+        );
+
+        try {
+            cache.put(key, note);
+
+            NoteResponse cached = cache.get(key, NoteResponse.class);
+
+            assertNotNull(cached);
+            assertEquals(note.getId(), cached.getId());
+            assertEquals(note.getTitle(), cached.getTitle());
+            assertEquals(note.getDescription(), cached.getDescription());
+            assertEquals(note.isPinned(), cached.isPinned());
+            assertEquals(note.getUpdatedAt(), cached.getUpdatedAt());
+        } finally {
+            cache.evict(key);
+        }
+    }
+
     @Test
     void shouldEvictCachedValue() {
 
@@ -75,10 +109,25 @@ class RedisCacheIntegrationTest {
         assertNull(cache.get(key));
     }
 
-    /**
-     * Verifies that all expected note caches
-     * are available through the CacheManager.
-     */
+    @Test
+    void shouldClearAllEntriesFromCache() {
+
+        Cache cache = cacheManager.getCache("feature12TestCache");
+
+        assertNotNull(cache);
+
+        String firstKey = "clear-first-" + UUID.randomUUID();
+        String secondKey = "clear-second-" + UUID.randomUUID();
+
+        cache.put(firstKey, "first");
+        cache.put(secondKey, "second");
+
+        cache.clear();
+
+        assertNull(cache.get(firstKey));
+        assertNull(cache.get(secondKey));
+    }
+
     @Test
     void shouldCreateNoteCaches() {
 

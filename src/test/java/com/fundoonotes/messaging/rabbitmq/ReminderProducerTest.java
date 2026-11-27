@@ -9,21 +9,20 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.support.converter.MessageConverter;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 
-/**
+/*
  * Project Name : Fundoo Notes Backend
- * Module       : RabbitMQ Messaging - Producer Test
+ * Description  : Verifies reminder event payloads and JSON message conversion.
  * Author       : Hemang
- * Date         : 14-11-2026
- *
- * Description:
- * Tests reminder event publishing through RabbitTemplate.
- * Verifies the exchange, routing key, and message contents.
+ * Date         : 27-11-2026
  */
 @ExtendWith(MockitoExtension.class)
 class ReminderProducerTest {
@@ -62,5 +61,29 @@ class ReminderProducerTest {
 
         assertEquals(25L, message.get("reminderId"));
         assertEquals("REMINDER_REQUESTED", message.get("eventType"));
+    }
+
+    @Test
+    void shouldSerializeReminderMessagesAsJson() {
+
+        MessageConverter converter =
+                new RabbitMQConfig().rabbitMessageConverter();
+        Message message = converter.toMessage(
+                Map.of(
+                        "reminderId", 25L,
+                        "eventType", "REMINDER_REQUESTED"
+                ),
+                new MessageProperties()
+        );
+
+        assertEquals(
+                MessageProperties.CONTENT_TYPE_JSON,
+                message.getMessageProperties().getContentType()
+        );
+
+        Map<?, ?> convertedMessage =
+                (Map<?, ?>) converter.fromMessage(message);
+        assertEquals(25, convertedMessage.get("reminderId"));
+        assertEquals("REMINDER_REQUESTED", convertedMessage.get("eventType"));
     }
 }
