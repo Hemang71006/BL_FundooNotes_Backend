@@ -84,6 +84,7 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
             UPDATE Reminder r
             SET r.status = :processing,
                 r.processingStartedAt = :now,
+                r.claimToken = :claimToken,
                 r.nextAttemptAt = NULL,
                 r.retryCount = r.retryCount + 1,
                 r.updatedAt = :now
@@ -104,7 +105,8 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
             @Param("processingBefore") LocalDateTime processingBefore,
             @Param("maxAttempts") int maxAttempts,
             @Param("pending") ReminderStatus pending,
-            @Param("processing") ReminderStatus processing
+            @Param("processing") ReminderStatus processing,
+            @Param("claimToken") String claimToken
     );
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
@@ -112,6 +114,7 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
             UPDATE Reminder r
             SET r.status = :failed,
                 r.processingStartedAt = NULL,
+                r.claimToken = NULL,
                 r.lastFailure = :failure,
                 r.updatedAt = :now
             WHERE r.retryCount >= :maxAttempts
@@ -139,6 +142,7 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
             UPDATE Reminder r
             SET r.status = :cancelled,
                 r.processingStartedAt = NULL,
+                r.claimToken = NULL,
                 r.nextAttemptAt = NULL,
                 r.updatedAt = :now
             WHERE r.note.id = :noteId

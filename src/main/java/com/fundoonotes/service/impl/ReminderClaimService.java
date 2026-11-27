@@ -5,6 +5,7 @@ import com.fundoonotes.entity.Reminder;
 import com.fundoonotes.entity.ReminderStatus;
 import com.fundoonotes.repository.NoteRepository;
 import com.fundoonotes.repository.ReminderRepository;
+import com.fundoonotes.util.ReminderTime;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Project Name : Fundoo Notes Backend
@@ -40,11 +42,11 @@ public class ReminderClaimService {
     private final NoteRepository noteRepository;
 
     @Transactional
-    public boolean claimReminder(Long reminderId) {
+    public Optional<String> claimReminder(Long reminderId) {
 
         Optional<Reminder> candidateResult = reminderRepository.findById(reminderId);
         if (candidateResult.isEmpty()) {
-            return false;
+            return Optional.empty();
         }
 
         Reminder candidate = candidateResult.get();
@@ -53,11 +55,11 @@ public class ReminderClaimService {
                 candidate.getUser().getId()
         );
         if (noteResult.isEmpty()) {
-            return false;
+            return Optional.empty();
         }
 
         Note note = noteResult.get();
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = ReminderTime.now();
         if (note.isTrashed()) {
             reminderRepository.cancelActiveByNoteAndUser(
                     note.getId(),
@@ -70,23 +72,26 @@ public class ReminderClaimService {
                     ReminderStatus.CANCELLED,
                     now
             );
-            return false;
+            return Optional.empty();
         }
 
-        return reminderRepository.claimDueReminder(
+        String claimToken = UUID.randomUUID().toString();
+        int claimed = reminderRepository.claimDueReminder(
                 reminderId,
                 now,
                 now.minusMinutes(PROCESSING_LEASE_MINUTES),
                 MAX_ATTEMPTS,
                 ReminderStatus.PENDING,
-                ReminderStatus.PROCESSING
-        ) == 1;
+                ReminderStatus.PROCESSING,
+                claimToken
+        );
+        return claimed == 1 ? Optional.of(claimToken) : Optional.empty();
     }
 
     @Transactional
     public void failExhaustedReminders() {
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = ReminderTime.now();
         int failedCount = reminderRepository.failExhaustedReminders(
                 now,
                 now.minusMinutes(PROCESSING_LEASE_MINUTES),

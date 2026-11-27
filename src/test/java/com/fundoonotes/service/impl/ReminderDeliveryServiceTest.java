@@ -6,6 +6,7 @@ import com.fundoonotes.entity.ReminderStatus;
 import com.fundoonotes.entity.User;
 import com.fundoonotes.repository.NoteRepository;
 import com.fundoonotes.repository.ReminderRepository;
+import com.fundoonotes.util.ReminderTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,6 +23,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -51,17 +53,18 @@ class ReminderDeliveryServiceTest {
     private JavaMailSender mailSender;
 
     private ReminderDeliveryService deliveryService;
+    private ReminderProcessor reminderProcessor;
     private Reminder reminder;
 
     @BeforeEach
     void setUp() {
 
         deliveryService = new ReminderDeliveryService(
-                claimService,
                 reminderRepository,
                 noteRepository,
                 mailSender
         );
+        reminderProcessor = new ReminderProcessor(claimService, deliveryService);
         ReflectionTestUtils.setField(deliveryService, "fromEmail", "noreply@example.com");
 
         User user = new User();
@@ -77,21 +80,22 @@ class ReminderDeliveryServiceTest {
         reminder.setId(21L);
         reminder.setNote(note);
         reminder.setUser(user);
-        reminder.setReminderAt(LocalDateTime.now().minusMinutes(1));
+        reminder.setReminderAt(ReminderTime.now().minusMinutes(1));
         reminder.setStatus(ReminderStatus.PROCESSING);
+        reminder.setClaimToken("claim-token");
         reminder.setRetryCount(1);
     }
 
     @Test
     void sendsToCurrentOwnerAndMarksReminderSentAfterMailSucceeds() {
 
-        when(claimService.claimReminder(21L)).thenReturn(true);
+        when(claimService.claimReminder(21L)).thenReturn(Optional.of("claim-token"));
         when(reminderRepository.findById(21L)).thenReturn(Optional.of(reminder));
         when(noteRepository.findByIdAndUser_IdForUpdate(12L, 8L))
                 .thenReturn(Optional.of(reminder.getNote()));
         when(reminderRepository.lockById(21L)).thenReturn(Optional.of(reminder));
 
-        deliveryService.processReminder(21L);
+        reminderProcessor.processReminder(21L);
 
         ArgumentCaptor<SimpleMailMessage> mailCaptor =
                 ArgumentCaptor.forClass(SimpleMailMessage.class);
@@ -100,13 +104,14 @@ class ReminderDeliveryServiceTest {
         assertEquals("Fundoo Notes - Note Reminder", mailCaptor.getValue().getSubject());
         assertEquals(ReminderStatus.SENT, reminder.getStatus());
         assertNotNull(reminder.getDeliveredAt());
+        assertNull(reminder.getClaimToken());
         verify(reminderRepository).save(reminder);
     }
 
     @Test
     void schedulesBoundedRetryWhenMailDeliveryFails() {
 
-        when(claimService.claimReminder(21L)).thenReturn(true);
+        when(claimService.claimReminder(21L)).thenReturn(Optional.of("claim-token"));
         when(reminderRepository.findById(21L)).thenReturn(Optional.of(reminder));
         when(noteRepository.findByIdAndUser_IdForUpdate(12L, 8L))
                 .thenReturn(Optional.of(reminder.getNote()));
@@ -114,20 +119,21 @@ class ReminderDeliveryServiceTest {
         doThrow(new MailSendException("SMTP unavailable"))
                 .when(mailSender).send(any(SimpleMailMessage.class));
 
-        deliveryService.processReminder(21L);
+        reminderProcessor.processReminder(21L);
 
         assertEquals(ReminderStatus.PENDING, reminder.getStatus());
         assertNotNull(reminder.getNextAttemptAt());
         assertEquals("MailSendException", reminder.getLastFailure());
+        assertNull(reminder.getClaimToken());
         verify(reminderRepository).save(reminder);
     }
 
     @Test
     void doesNotSendWhenReminderCannotBeClaimedAgain() {
 
-        when(claimService.claimReminder(21L)).thenReturn(false);
+        when(claimService.claimReminder(21L)).thenReturn(Optional.empty());
 
-        deliveryService.processReminder(21L);
+        reminderProcessor.processReminder(21L);
 
         verifyNoInteractions(mailSender);
         verify(reminderRepository, never()).findById(anyLong());
@@ -137,15 +143,16 @@ class ReminderDeliveryServiceTest {
     void cancelsInsteadOfSendingWhenNoteWasTrashed() {
 
         reminder.getNote().setTrashed(true);
-        when(claimService.claimReminder(21L)).thenReturn(true);
+        when(claimService.claimReminder(21L)).thenReturn(Optional.of("claim-token"));
         when(reminderRepository.findById(21L)).thenReturn(Optional.of(reminder));
         when(noteRepository.findByIdAndUser_IdForUpdate(12L, 8L))
                 .thenReturn(Optional.of(reminder.getNote()));
         when(reminderRepository.lockById(21L)).thenReturn(Optional.of(reminder));
 
-        deliveryService.processReminder(21L);
+        reminderProcessor.processReminder(21L);
 
         assertEquals(ReminderStatus.CANCELLED, reminder.getStatus());
+        assertNull(reminder.getClaimToken());
         verifyNoInteractions(mailSender);
     }
 
@@ -155,13 +162,13 @@ class ReminderDeliveryServiceTest {
         User otherUser = new User();
         otherUser.setId(99L);
         reminder.getNote().setUser(otherUser);
-        when(claimService.claimReminder(21L)).thenReturn(true);
+        when(claimService.claimReminder(21L)).thenReturn(Optional.of("claim-token"));
         when(reminderRepository.findById(21L)).thenReturn(Optional.of(reminder));
         when(noteRepository.findByIdAndUser_IdForUpdate(12L, 8L))
                 .thenReturn(Optional.of(reminder.getNote()));
         when(reminderRepository.lockById(21L)).thenReturn(Optional.of(reminder));
 
-        deliveryService.processReminder(21L);
+        reminderProcessor.processReminder(21L);
 
         assertEquals(ReminderStatus.CANCELLED, reminder.getStatus());
         verifyNoInteractions(mailSender);
@@ -171,7 +178,7 @@ class ReminderDeliveryServiceTest {
     void marksReminderFailedAfterFinalMailAttempt() {
 
         reminder.setRetryCount(ReminderClaimService.MAX_ATTEMPTS);
-        when(claimService.claimReminder(21L)).thenReturn(true);
+        when(claimService.claimReminder(21L)).thenReturn(Optional.of("claim-token"));
         when(reminderRepository.findById(21L)).thenReturn(Optional.of(reminder));
         when(noteRepository.findByIdAndUser_IdForUpdate(12L, 8L))
                 .thenReturn(Optional.of(reminder.getNote()));
@@ -179,10 +186,45 @@ class ReminderDeliveryServiceTest {
         doThrow(new MailSendException("SMTP unavailable"))
                 .when(mailSender).send(any(SimpleMailMessage.class));
 
-        deliveryService.processReminder(21L);
+        reminderProcessor.processReminder(21L);
 
         assertEquals(ReminderStatus.FAILED, reminder.getStatus());
         assertEquals("MailSendException", reminder.getLastFailure());
+        assertNull(reminder.getClaimToken());
         verify(reminderRepository).save(reminder);
+    }
+
+    @Test
+    void doesNotSendWhenAnotherWorkerHasReclaimedTheExpiredLease() {
+
+        when(claimService.claimReminder(21L)).thenReturn(Optional.of("stale-token"));
+        when(reminderRepository.findById(21L)).thenReturn(Optional.of(reminder));
+        when(noteRepository.findByIdAndUser_IdForUpdate(12L, 8L))
+                .thenReturn(Optional.of(reminder.getNote()));
+        reminder.setClaimToken("current-token");
+        when(reminderRepository.lockById(21L)).thenReturn(Optional.of(reminder));
+
+        reminderProcessor.processReminder(21L);
+
+        verifyNoInteractions(mailSender);
+        verify(reminderRepository, never()).save(any(Reminder.class));
+    }
+
+    @Test
+    void recordsMissingSenderConfigurationInsteadOfSending() {
+
+        ReflectionTestUtils.setField(deliveryService, "fromEmail", "");
+        when(claimService.claimReminder(21L)).thenReturn(Optional.of("claim-token"));
+        when(reminderRepository.findById(21L)).thenReturn(Optional.of(reminder));
+        when(noteRepository.findByIdAndUser_IdForUpdate(12L, 8L))
+                .thenReturn(Optional.of(reminder.getNote()));
+        when(reminderRepository.lockById(21L)).thenReturn(Optional.of(reminder));
+
+        reminderProcessor.processReminder(21L);
+
+        assertEquals("MAIL_FROM_NOT_CONFIGURED", reminder.getLastFailure());
+        assertEquals(ReminderStatus.PENDING, reminder.getStatus());
+        assertNull(reminder.getClaimToken());
+        verifyNoInteractions(mailSender);
     }
 }

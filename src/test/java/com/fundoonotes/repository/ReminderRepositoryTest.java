@@ -5,17 +5,29 @@ import com.fundoonotes.entity.Reminder;
 import com.fundoonotes.entity.ReminderStatus;
 import com.fundoonotes.entity.User;
 import com.fundoonotes.service.impl.ReminderClaimService;
+import com.fundoonotes.util.ReminderTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.transaction.TestTransaction;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Project Name : Fundoo Notes Backend
@@ -29,6 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@Import(ReminderClaimService.class)
 class ReminderRepositoryTest {
 
     @Autowired
@@ -39,6 +52,12 @@ class ReminderRepositoryTest {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private ReminderClaimService reminderClaimService;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     private User user;
     private Note note;
@@ -65,7 +84,7 @@ class ReminderRepositoryTest {
         Reminder reminder = new Reminder();
         reminder.setNote(note);
         reminder.setUser(user);
-        reminder.setReminderAt(LocalDateTime.now().plusHours(1));
+        reminder.setReminderAt(ReminderTime.now().plusHours(1));
         reminder.setStatus(ReminderStatus.PENDING);
 
         Reminder savedReminder = reminderRepository.saveAndFlush(reminder);
@@ -90,12 +109,12 @@ class ReminderRepositoryTest {
         Reminder dueReminder = new Reminder();
         dueReminder.setNote(note);
         dueReminder.setUser(user);
-        dueReminder.setReminderAt(LocalDateTime.now().minusMinutes(1));
+        dueReminder.setReminderAt(ReminderTime.now().minusMinutes(1));
         reminderRepository.saveAndFlush(dueReminder);
 
         List<Long> dueIds = reminderRepository.findDueReminderIds(
-                LocalDateTime.now(),
-                LocalDateTime.now().minusMinutes(
+                ReminderTime.now(),
+                ReminderTime.now().minusMinutes(
                         ReminderClaimService.PROCESSING_LEASE_MINUTES
                 ),
                 ReminderClaimService.MAX_ATTEMPTS,
@@ -113,17 +132,18 @@ class ReminderRepositoryTest {
         Reminder reminder = new Reminder();
         reminder.setNote(note);
         reminder.setUser(user);
-        reminder.setReminderAt(LocalDateTime.now().minusMinutes(1));
+        reminder.setReminderAt(ReminderTime.now().minusMinutes(1));
         reminder = reminderRepository.saveAndFlush(reminder);
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = ReminderTime.now();
         int firstClaim = reminderRepository.claimDueReminder(
                 reminder.getId(),
                 now,
                 now.minusMinutes(ReminderClaimService.PROCESSING_LEASE_MINUTES),
                 ReminderClaimService.MAX_ATTEMPTS,
                 ReminderStatus.PENDING,
-                ReminderStatus.PROCESSING
+                ReminderStatus.PROCESSING,
+                "first-claim-token"
         );
         int duplicateClaim = reminderRepository.claimDueReminder(
                 reminder.getId(),
@@ -131,7 +151,8 @@ class ReminderRepositoryTest {
                 now.minusMinutes(ReminderClaimService.PROCESSING_LEASE_MINUTES),
                 ReminderClaimService.MAX_ATTEMPTS,
                 ReminderStatus.PENDING,
-                ReminderStatus.PROCESSING
+                ReminderStatus.PROCESSING,
+                "second-claim-token"
         );
 
         assertEquals(1, firstClaim);
@@ -140,6 +161,52 @@ class ReminderRepositoryTest {
                 ReminderStatus.PROCESSING,
                 reminderRepository.findById(reminder.getId()).orElseThrow().getStatus()
         );
+        assertEquals(
+                "first-claim-token",
+                reminderRepository.findById(reminder.getId()).orElseThrow().getClaimToken()
+        );
+    }
+
+    @Test
+    void concurrentlyClaimsDueReminderOnlyOnce() throws Exception {
+
+        Reminder reminder = new Reminder();
+        reminder.setNote(note);
+        reminder.setUser(user);
+        reminder.setReminderAt(ReminderTime.now().minusMinutes(1));
+        reminder = reminderRepository.saveAndFlush(reminder);
+        Long reminderId = reminder.getId();
+
+        TestTransaction.flagForCommit();
+        TestTransaction.end();
+
+        ExecutorService workers = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            Future<Boolean> first = workers.submit(() -> tryClaim(reminderId, ready, start));
+            Future<Boolean> second = workers.submit(() -> tryClaim(reminderId, ready, start));
+
+            assertTrue(ready.await(10, TimeUnit.SECONDS));
+            start.countDown();
+            int claimCount = (first.get(10, TimeUnit.SECONDS) ? 1 : 0)
+                    + (second.get(10, TimeUnit.SECONDS) ? 1 : 0);
+
+            assertEquals(1, claimCount);
+            assertEquals(
+                    ReminderStatus.PROCESSING,
+                    reminderRepository.findById(reminderId).orElseThrow().getStatus()
+            );
+        } finally {
+            start.countDown();
+            workers.shutdownNow();
+            workers.awaitTermination(10, TimeUnit.SECONDS);
+            new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                reminderRepository.deleteById(reminderId);
+                noteRepository.deleteById(note.getId());
+                userRepository.deleteById(user.getId());
+            });
+        }
     }
 
     @Test
@@ -148,7 +215,10 @@ class ReminderRepositoryTest {
         Reminder reminder = new Reminder();
         reminder.setNote(note);
         reminder.setUser(user);
-        reminder.setReminderAt(LocalDateTime.now().plusHours(1));
+        reminder.setReminderAt(ReminderTime.now().plusHours(1));
+        reminder.setStatus(ReminderStatus.PROCESSING);
+        reminder.setProcessingStartedAt(ReminderTime.now());
+        reminder.setClaimToken("active-claim-token");
         reminderRepository.saveAndFlush(reminder);
 
         int cancelledCount = reminderRepository.cancelActiveByNoteAndUser(
@@ -160,7 +230,7 @@ class ReminderRepositoryTest {
                         ReminderStatus.FAILED
                 ),
                 ReminderStatus.CANCELLED,
-                LocalDateTime.now()
+                ReminderTime.now()
         );
 
         assertEquals(1, cancelledCount);
@@ -168,6 +238,7 @@ class ReminderRepositoryTest {
                 ReminderStatus.CANCELLED,
                 reminderRepository.findById(reminder.getId()).orElseThrow().getStatus()
         );
+        assertNull(reminderRepository.findById(reminder.getId()).orElseThrow().getClaimToken());
     }
 
     @Test
@@ -176,13 +247,14 @@ class ReminderRepositoryTest {
         Reminder reminder = new Reminder();
         reminder.setNote(note);
         reminder.setUser(user);
-        reminder.setReminderAt(LocalDateTime.now().minusHours(1));
+        reminder.setReminderAt(ReminderTime.now().minusHours(1));
         reminder.setStatus(ReminderStatus.PROCESSING);
         reminder.setRetryCount(ReminderClaimService.MAX_ATTEMPTS);
-        reminder.setProcessingStartedAt(LocalDateTime.now().minusMinutes(20));
+        reminder.setProcessingStartedAt(ReminderTime.now().minusMinutes(20));
+        reminder.setClaimToken("expired-token");
         reminder = reminderRepository.saveAndFlush(reminder);
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = ReminderTime.now();
         int failedCount = reminderRepository.failExhaustedReminders(
                 now,
                 now.minusMinutes(ReminderClaimService.PROCESSING_LEASE_MINUTES),
@@ -198,5 +270,51 @@ class ReminderRepositoryTest {
                 ReminderStatus.FAILED,
                 reminderRepository.findById(reminder.getId()).orElseThrow().getStatus()
         );
+        assertNull(reminderRepository.findById(reminder.getId()).orElseThrow().getClaimToken());
+    }
+
+    @Test
+    void replacesFencingTokenWhenAnExpiredClaimIsReclaimed() {
+
+        Reminder reminder = new Reminder();
+        reminder.setNote(note);
+        reminder.setUser(user);
+        reminder.setReminderAt(ReminderTime.now().minusHours(1));
+        reminder.setStatus(ReminderStatus.PROCESSING);
+        reminder.setRetryCount(1);
+        reminder.setProcessingStartedAt(ReminderTime.now().minusMinutes(20));
+        reminder.setClaimToken("expired-token");
+        reminder = reminderRepository.saveAndFlush(reminder);
+
+        String replacementToken = "replacement-token";
+        int claimed = reminderRepository.claimDueReminder(
+                reminder.getId(),
+                ReminderTime.now(),
+                ReminderTime.now().minusMinutes(
+                        ReminderClaimService.PROCESSING_LEASE_MINUTES
+                ),
+                ReminderClaimService.MAX_ATTEMPTS,
+                ReminderStatus.PENDING,
+                ReminderStatus.PROCESSING,
+                replacementToken
+        );
+
+        assertEquals(1, claimed);
+        assertEquals(
+                replacementToken,
+                reminderRepository.findById(reminder.getId()).orElseThrow().getClaimToken()
+        );
+    }
+
+    private boolean tryClaim(
+            Long reminderId,
+            CountDownLatch ready,
+            CountDownLatch start) throws InterruptedException {
+
+        ready.countDown();
+        if (!start.await(10, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Timed out waiting to start concurrent claim");
+        }
+        return reminderClaimService.claimReminder(reminderId).isPresent();
     }
 }

@@ -5,6 +5,7 @@ import com.fundoonotes.entity.Reminder;
 import com.fundoonotes.entity.User;
 import com.fundoonotes.repository.NoteRepository;
 import com.fundoonotes.repository.ReminderRepository;
+import com.fundoonotes.util.ReminderTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,6 +15,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
+import org.mockito.ArgumentCaptor;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.*;
@@ -73,19 +77,24 @@ class ReminderClaimServiceTest {
                 any(LocalDateTime.class),
                 eq(ReminderClaimService.MAX_ATTEMPTS),
                 any(),
-                any()
+                any(),
+                anyString()
         )).thenReturn(1);
 
-        assertTrue(service.claimReminder(21L));
+        Optional<String> claimToken = service.claimReminder(21L);
+        assertTrue(claimToken.isPresent());
 
+        ArgumentCaptor<String> tokenCaptor = ArgumentCaptor.forClass(String.class);
         verify(reminderRepository).claimDueReminder(
                 eq(21L),
                 any(LocalDateTime.class),
                 any(LocalDateTime.class),
                 eq(ReminderClaimService.MAX_ATTEMPTS),
                 any(),
-                any()
+                any(),
+                tokenCaptor.capture()
         );
+        assertEquals(claimToken.orElseThrow(), tokenCaptor.getValue());
     }
 
     @Test
@@ -104,7 +113,7 @@ class ReminderClaimServiceTest {
                 any(LocalDateTime.class)
         )).thenReturn(1);
 
-        assertFalse(service.claimReminder(21L));
+        assertFalse(service.claimReminder(21L).isPresent());
 
         verify(reminderRepository, never()).claimDueReminder(
                 anyLong(),
@@ -112,7 +121,8 @@ class ReminderClaimServiceTest {
                 any(LocalDateTime.class),
                 anyInt(),
                 any(),
-                any()
+                any(),
+                anyString()
         );
     }
 }

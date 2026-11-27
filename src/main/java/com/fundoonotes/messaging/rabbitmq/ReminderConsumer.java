@@ -1,6 +1,6 @@
 package com.fundoonotes.messaging.rabbitmq;
 
-import com.fundoonotes.service.impl.ReminderDeliveryService;
+import com.fundoonotes.service.impl.ReminderProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -24,10 +24,10 @@ public class ReminderConsumer {
     private static final Logger logger =
             LoggerFactory.getLogger(ReminderConsumer.class);
 
-    private final ReminderDeliveryService reminderDeliveryService;
+    private final ReminderProcessor reminderProcessor;
 
-    public ReminderConsumer(ReminderDeliveryService reminderDeliveryService) {
-        this.reminderDeliveryService = reminderDeliveryService;
+    public ReminderConsumer(ReminderProcessor reminderProcessor) {
+        this.reminderProcessor = reminderProcessor;
     }
 
     @RabbitListener(queues = "${app.rabbitmq.queue}")
@@ -40,7 +40,7 @@ public class ReminderConsumer {
         }
 
         try {
-            reminderDeliveryService.processReminder(
+            reminderProcessor.processReminder(
                     Long.valueOf(reminderIdValue.toString())
             );
         } catch (NumberFormatException exception) {

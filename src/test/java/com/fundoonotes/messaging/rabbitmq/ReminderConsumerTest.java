@@ -3,7 +3,7 @@ package com.fundoonotes.messaging.rabbitmq;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import com.fundoonotes.service.impl.ReminderDeliveryService;
+import com.fundoonotes.service.impl.ReminderProcessor;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -13,14 +13,14 @@ import static org.mockito.Mockito.*;
 
 class ReminderConsumerTest {
 
-    private ReminderDeliveryService reminderDeliveryService;
+    private ReminderProcessor reminderProcessor;
     private ReminderConsumer consumer;
 
     @BeforeEach
     void setUp() {
 
-        reminderDeliveryService = mock(ReminderDeliveryService.class);
-        consumer = new ReminderConsumer(reminderDeliveryService);
+        reminderProcessor = mock(ReminderProcessor.class);
+        consumer = new ReminderConsumer(reminderProcessor);
     }
 
     @Test
@@ -33,6 +33,6 @@ class ReminderConsumerTest {
 
         consumer.receiveReminder(message);
 
-        verify(reminderDeliveryService).processReminder(eq(25L));
+        verify(reminderProcessor).processReminder(eq(25L));
     }
 }

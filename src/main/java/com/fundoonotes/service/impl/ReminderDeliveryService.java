@@ -5,6 +5,7 @@ import com.fundoonotes.entity.Reminder;
 import com.fundoonotes.entity.ReminderStatus;
 import com.fundoonotes.repository.NoteRepository;
 import com.fundoonotes.repository.ReminderRepository;
+import com.fundoonotes.util.ReminderTime;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,7 +41,6 @@ public class ReminderDeliveryService {
     private static final int MAX_ATTEMPTS = ReminderClaimService.MAX_ATTEMPTS;
     private static final long RETRY_BASE_SECONDS = 30;
 
-    private final ReminderClaimService reminderClaimService;
     private final ReminderRepository reminderRepository;
     private final NoteRepository noteRepository;
     private final JavaMailSender mailSender;
@@ -48,15 +48,8 @@ public class ReminderDeliveryService {
     @Value("${app.mail.from}")
     private String fromEmail;
 
-    public void processReminder(Long reminderId) {
-
-        if (reminderClaimService.claimReminder(reminderId)) {
-            deliverClaimedReminder(reminderId);
-        }
-    }
-
     @Transactional
-    public void deliverClaimedReminder(Long reminderId) {
+    public void deliverClaimedReminder(Long reminderId, String claimToken) {
 
         Optional<Reminder> candidateResult = reminderRepository.findById(reminderId);
         if (candidateResult.isEmpty()) {
@@ -75,7 +68,8 @@ public class ReminderDeliveryService {
         }
 
         Reminder reminder = reminderResult.get();
-        if (reminder.getStatus() != ReminderStatus.PROCESSING) {
+        if (reminder.getStatus() != ReminderStatus.PROCESSING
+                || !claimToken.equals(reminder.getClaimToken())) {
             return;
         }
 
@@ -85,8 +79,14 @@ public class ReminderDeliveryService {
                 .equals(reminder.getUser().getId())) {
             reminder.setStatus(ReminderStatus.CANCELLED);
             reminder.setProcessingStartedAt(null);
+            reminder.setClaimToken(null);
             reminder.setNextAttemptAt(null);
             reminderRepository.save(reminder);
+            return;
+        }
+
+        if (fromEmail == null || fromEmail.isBlank()) {
+            scheduleRetry(reminder, "MAIL_FROM_NOT_CONFIGURED");
             return;
         }
 
@@ -100,17 +100,18 @@ public class ReminderDeliveryService {
                         "This is your scheduled Fundoo Notes reminder.\n\n" +
                         "Note: " + note.getTitle() + "\n" +
                         "Scheduled for: " + reminder.getReminderAt()
-                        .format(REMINDER_TIME_FORMAT) + "\n\n" +
+                                .format(REMINDER_TIME_FORMAT) + " (Asia/Kolkata)\n\n" +
                         "Please open Fundoo Notes to view your note.\n\n" +
                         "Regards,\nFundoo Notes Team"
         );
 
         try {
             mailSender.send(message);
-            LocalDateTime deliveredAt = LocalDateTime.now();
+            LocalDateTime deliveredAt = ReminderTime.now();
             reminder.setStatus(ReminderStatus.SENT);
             reminder.setDeliveredAt(deliveredAt);
             reminder.setProcessingStartedAt(null);
+            reminder.setClaimToken(null);
             reminder.setNextAttemptAt(null);
             reminder.setLastFailure(null);
             reminder.setUpdatedAt(deliveredAt);
@@ -118,15 +119,16 @@ public class ReminderDeliveryService {
 
             logger.info("Reminder email sent: reminderId={}", reminderId);
         } catch (MailException exception) {
-            scheduleRetry(reminder, exception);
+            scheduleRetry(reminder, exception.getClass().getSimpleName());
         }
     }
 
-    private void scheduleRetry(Reminder reminder, MailException exception) {
+    private void scheduleRetry(Reminder reminder, String failureType) {
 
-        LocalDateTime now = LocalDateTime.now();
-        reminder.setLastFailure(exception.getClass().getSimpleName());
+        LocalDateTime now = ReminderTime.now();
+        reminder.setLastFailure(failureType);
         reminder.setProcessingStartedAt(null);
+        reminder.setClaimToken(null);
         reminder.setUpdatedAt(now);
 
         if (reminder.getRetryCount() >= MAX_ATTEMPTS) {
@@ -144,7 +146,7 @@ public class ReminderDeliveryService {
                 "Reminder email failed: reminderId={}, attempt={}, errorType={}, status={}",
                 reminder.getId(),
                 reminder.getRetryCount(),
-                exception.getClass().getSimpleName(),
+                failureType,
                 reminder.getStatus()
         );
     }

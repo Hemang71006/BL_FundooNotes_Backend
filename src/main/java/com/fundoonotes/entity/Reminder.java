@@ -19,6 +19,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import com.fundoonotes.util.ReminderTime;
 
 /**
  * Project Name : Fundoo Notes Backend
@@ -78,6 +79,9 @@ public class Reminder {
     @Column(name = "processing_started_at")
     private LocalDateTime processingStartedAt;
 
+    @Column(name = "claim_token", length = 36)
+    private String claimToken;
+
     @Column(name = "retry_count", nullable = false)
     private int retryCount;
 
@@ -86,13 +90,13 @@ public class Reminder {
 
     @PrePersist
     protected void onCreate() {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = ReminderTime.now();
         createdAt = now;
         updatedAt = now;
     }
 
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
+        updatedAt = ReminderTime.now();
     }
 }

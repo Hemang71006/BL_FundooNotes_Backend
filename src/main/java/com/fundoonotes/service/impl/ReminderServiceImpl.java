@@ -11,6 +11,7 @@ import com.fundoonotes.repository.NoteRepository;
 import com.fundoonotes.repository.ReminderRepository;
 import com.fundoonotes.repository.UserRepository;
 import com.fundoonotes.service.ReminderService;
+import com.fundoonotes.util.ReminderTime;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -106,7 +107,7 @@ public class ReminderServiceImpl implements ReminderService {
                 .findByUser_IdAndStatusAndReminderAtGreaterThanEqualOrderByReminderAtAsc(
                         user.getId(),
                         ReminderStatus.PENDING,
-                        LocalDateTime.now()
+                        ReminderTime.now()
                 )
                 .stream()
                 .map(this::toResponse)
@@ -145,6 +146,7 @@ public class ReminderServiceImpl implements ReminderService {
         reminder.setRetryCount(0);
         reminder.setNextAttemptAt(null);
         reminder.setProcessingStartedAt(null);
+        reminder.setClaimToken(null);
         reminder.setLastFailure(null);
         reminder.setDeliveredAt(null);
 
@@ -162,6 +164,7 @@ public class ReminderServiceImpl implements ReminderService {
         reminder.setStatus(ReminderStatus.CANCELLED);
         reminder.setNextAttemptAt(null);
         reminder.setProcessingStartedAt(null);
+        reminder.setClaimToken(null);
         return toResponse(reminderRepository.save(reminder));
     }
 
@@ -175,6 +178,7 @@ public class ReminderServiceImpl implements ReminderService {
         reminder.setStatus(ReminderStatus.COMPLETED);
         reminder.setNextAttemptAt(null);
         reminder.setProcessingStartedAt(null);
+        reminder.setClaimToken(null);
         return toResponse(reminderRepository.save(reminder));
     }
 
@@ -194,7 +198,7 @@ public class ReminderServiceImpl implements ReminderService {
                 userId,
                 ACTIVE_STATUSES,
                 ReminderStatus.CANCELLED,
-                LocalDateTime.now()
+                ReminderTime.now()
         );
     }
 
@@ -235,7 +239,7 @@ public class ReminderServiceImpl implements ReminderService {
 
         if (request == null
                 || request.getReminderAt() == null
-                || !request.getReminderAt().isAfter(LocalDateTime.now())) {
+                || !request.getReminderAt().isAfter(ReminderTime.now())) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Reminder date and time must be in the future"

@@ -1,8 +1,10 @@
 # Reminder API
 
 All reminder endpoints require a valid JWT bearer token. A reminder can only be
-created for a note owned by the authenticated user. Reminder times are local
-date-times and must be in the future.
+created for a note owned by the authenticated user. The API accepts local
+date-times interpreted in `Asia/Kolkata`; supplied times must be in the future.
+Responses use the same local wall-clock convention and do not include a UTC
+offset.
 
 ## Create
 
@@ -56,18 +58,31 @@ Only `PENDING` and `FAILED` reminders may be updated, cancelled, or completed.
 
 ## Delivery and recovery
 
-RabbitMQ messages contain only the persisted reminder ID and act as immediate
-wake-ups. A MySQL-backed scheduler polls due reminders, so schedules survive
-backend restarts and broker outages. Email delivery uses the current note title
-and registered account email. Mail failures are retried up to five total
-attempts with exponential delays starting at 30 seconds; exhausted reminders
-become `FAILED`.
+RabbitMQ messages contain only the persisted reminder ID. The consumer and the
+MySQL-backed recovery scheduler use the same claim-and-delivery processor. A
+message published when a future reminder is created may be consumed before it
+is due; the database poller remains authoritative and recovers due reminders
+after backend restarts or broker outages.
+
+Email delivery uses the current note title and registered account email. Set
+`MAIL_FROM` to a valid sender address. Configure `MAIL_HOST` and `MAIL_PORT` for
+the SMTP server. If SMTP authentication is required, set `MAIL_USERNAME`,
+`MAIL_PASSWORD`, `MAIL_SMTP_AUTH=true`, and, when supported,
+`MAIL_SMTP_STARTTLS_ENABLE=true`. Authentication and STARTTLS default to
+disabled for local unauthenticated mail servers; no sample credentials or
+sender address are supplied. Without `MAIL_FROM`, a due reminder is not sent
+and records `MAIL_FROM_NOT_CONFIGURED`.
+
+Mail failures are retried up to five total attempts with exponential delays
+starting at 30 seconds; exhausted reminders become `FAILED`.
 
 Moving a note to trash cancels its pending/processing/failed reminders.
 Restoring the note does not reactivate them. Permanently deleting a note
 removes its reminders. Archiving does not cancel reminders.
 
-The database claim prevents concurrent processing and duplicate RabbitMQ
-redeliveries. SMTP itself does not provide transactional exactly-once delivery:
-if a mail server accepts a message but the connection fails before the
-application receives confirmation, a later retry can result in a duplicate.
+Database claims carry a per-attempt fencing token. A worker whose claim was
+replaced after its processing lease expired cannot send email, and concurrent
+RabbitMQ redeliveries and recovery polling share the same atomic claim path.
+SMTP itself does not provide transactional exactly-once delivery: if a mail
+server accepts a message but the connection fails before the application
+receives confirmation, a later retry can result in a duplicate.

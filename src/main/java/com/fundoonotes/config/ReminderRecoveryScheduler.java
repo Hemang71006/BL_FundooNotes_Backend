@@ -3,7 +3,8 @@ package com.fundoonotes.config;
 import com.fundoonotes.entity.ReminderStatus;
 import com.fundoonotes.repository.ReminderRepository;
 import com.fundoonotes.service.impl.ReminderClaimService;
-import com.fundoonotes.service.impl.ReminderDeliveryService;
+import com.fundoonotes.service.impl.ReminderProcessor;
+import com.fundoonotes.util.ReminderTime;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -30,13 +31,13 @@ public class ReminderRecoveryScheduler {
 
     private final ReminderRepository reminderRepository;
     private final ReminderClaimService reminderClaimService;
-    private final ReminderDeliveryService reminderDeliveryService;
+    private final ReminderProcessor reminderProcessor;
 
     @Scheduled(fixedDelayString = "${app.reminder.poll-interval-ms:10000}")
     public void processDueReminders() {
 
         reminderClaimService.failExhaustedReminders();
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = ReminderTime.now();
         List<Long> reminderIds = reminderRepository.findDueReminderIds(
                 now,
                 now.minusMinutes(ReminderClaimService.PROCESSING_LEASE_MINUTES),
@@ -47,7 +48,7 @@ public class ReminderRecoveryScheduler {
         );
 
         for (Long reminderId : reminderIds) {
-            reminderDeliveryService.processReminder(reminderId);
+            reminderProcessor.processReminder(reminderId);
         }
     }
 }

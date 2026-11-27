@@ -10,6 +10,8 @@ import com.fundoonotes.event.ReminderEvent;
 import com.fundoonotes.repository.NoteRepository;
 import com.fundoonotes.repository.ReminderRepository;
 import com.fundoonotes.repository.UserRepository;
+import com.fundoonotes.util.ReminderTime;
+
 import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -82,7 +84,7 @@ class ReminderServiceImplTest {
     @Test
     void shouldPublishReminderEventForValidRequest() {
 
-        LocalDateTime reminderAt = LocalDateTime.now().plusDays(1);
+        LocalDateTime reminderAt = ReminderTime.now().plusDays(1);
 
         ReminderRequest request = new ReminderRequest();
         request.setReminderAt(reminderAt);
@@ -122,7 +124,7 @@ class ReminderServiceImplTest {
     void shouldRejectReminderForUnknownUser() {
 
         ReminderRequest request = new ReminderRequest();
-        request.setReminderAt(LocalDateTime.now().plusDays(1));
+        request.setReminderAt(ReminderTime.now().plusDays(1));
 
         when(userRepository.findByEmail("unknown@example.com"))
                 .thenReturn(Optional.empty());
@@ -143,7 +145,7 @@ class ReminderServiceImplTest {
     void shouldRejectReminderForNoteNotOwnedByUser() {
 
         ReminderRequest request = new ReminderRequest();
-        request.setReminderAt(LocalDateTime.now().plusDays(1));
+        request.setReminderAt(ReminderTime.now().plusDays(1));
 
         when(userRepository.findByEmail("test@example.com"))
                 .thenReturn(Optional.of(user));
@@ -167,7 +169,7 @@ class ReminderServiceImplTest {
     void shouldRejectReminderForTrashedNote() {
 
         ReminderRequest request = new ReminderRequest();
-        request.setReminderAt(LocalDateTime.now().plusDays(1));
+        request.setReminderAt(ReminderTime.now().plusDays(1));
 
         note.setTrashed(true);
 
@@ -193,7 +195,7 @@ class ReminderServiceImplTest {
     void shouldRejectPastReminderTime() {
 
         ReminderRequest request = new ReminderRequest();
-        request.setReminderAt(LocalDateTime.now().minusDays(1));
+        request.setReminderAt(ReminderTime.now().minusDays(1));
 
         when(userRepository.findByEmail("test@example.com"))
                 .thenReturn(Optional.of(user));
@@ -231,7 +233,7 @@ class ReminderServiceImplTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         ReminderRequest request = new ReminderRequest();
-        request.setReminderAt(LocalDateTime.now().plusDays(1));
+        request.setReminderAt(ReminderTime.now().plusDays(1));
 
         reminderService.updateReminder(25L, request, "test@example.com");
 
