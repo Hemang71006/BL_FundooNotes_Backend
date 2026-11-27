@@ -2,9 +2,12 @@
 package com.fundoonotes.messaging.rabbitmq;
 
 import com.fundoonotes.event.ReminderEvent;
+
 import java.util.Map;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.amqp.AmqpException;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -13,13 +16,13 @@ import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
  * Project Name : Fundoo Notes Backend
- * Module       : RabbitMQ Messaging - Producer
+ * Module       : Reminder Integration - RabbitMQ Producer
  * Author       : Hemang
- * Date         : 14-11-2026
+ * Date         : 27-11-2026
  *
  * Description:
- * Publishes reminder events to RabbitMQ.
- * Sends messages only after the database transaction commits.
+ * Publishes persisted reminder identifiers to RabbitMQ after commit.
+ * Database polling recovers schedules if broker publishing is unavailable.
  */
 @Component
 public class ReminderProducer {
@@ -45,24 +48,26 @@ public class ReminderProducer {
     public void publishReminder(ReminderEvent event) {
 
         Map<String, Object> message = Map.of(
-                "noteId", event.noteId(),
-                "userId", event.userId(),
-                "userEmail", event.userEmail(),
-                "noteTitle", event.noteTitle(),
-                "reminderAt", event.reminderAt().toString(),
+                "reminderId", event.reminderId(),
                 "eventType", "REMINDER_REQUESTED"
         );
 
-        rabbitTemplate.convertAndSend(
-                exchangeName,
-                routingKey,
-                message
-        );
-
-        logger.info(
-                "Published reminder event: noteId={}, userId={}",
-                event.noteId(),
-                event.userId()
-        );
+        try {
+            rabbitTemplate.convertAndSend(
+                    exchangeName,
+                    routingKey,
+                    message
+            );
+            logger.info(
+                    "Published reminder wake-up: reminderId={}",
+                    event.reminderId()
+            );
+        } catch (AmqpException exception) {
+            logger.error(
+                    "Could not publish reminder wake-up; persistent recovery will retry: reminderId={}, errorType={}",
+                    event.reminderId(),
+                    exception.getClass().getSimpleName()
+            );
+        }
     }
 }

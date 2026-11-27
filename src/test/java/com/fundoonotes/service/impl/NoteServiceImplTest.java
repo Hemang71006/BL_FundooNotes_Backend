@@ -7,6 +7,7 @@ import com.fundoonotes.entity.Note;
 import com.fundoonotes.entity.User;
 import com.fundoonotes.repository.NoteRepository;
 import com.fundoonotes.repository.UserRepository;
+import com.fundoonotes.service.ReminderService;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,9 @@ class NoteServiceImplTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private ReminderService reminderService;
 
     @InjectMocks
     private NoteServiceImpl noteService;
@@ -175,7 +179,7 @@ class NoteServiceImplTest {
     @Test
     void shouldMoveNoteToTrash() {
 
-        when(noteRepository.findByIdAndUser_Id(10L, 1L))
+        when(noteRepository.findByIdAndUser_IdForUpdate(10L, 1L))
                 .thenReturn(Optional.of(note));
 
         when(noteRepository.save(any(Note.class)))
@@ -184,6 +188,7 @@ class NoteServiceImplTest {
         NoteResponse response = noteService.trashNote(10L, email);
 
         assertTrue(response.isTrashed());
+        verify(reminderService).cancelActiveForNote(10L, 1L);
     }
 
     @Test
@@ -205,11 +210,12 @@ class NoteServiceImplTest {
     @Test
     void shouldDeleteNotePermanently() {
 
-        when(noteRepository.findByIdAndUser_Id(10L, 1L))
+        when(noteRepository.findByIdAndUser_IdForUpdate(10L, 1L))
                 .thenReturn(Optional.of(note));
 
         noteService.deleteNote(10L, email);
 
+        verify(reminderService).deleteForNote(10L, 1L);
         verify(noteRepository).delete(note);
     }
 }

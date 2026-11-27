@@ -9,6 +9,12 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
+/*
+ * Project Name : Fundoo Notes Backend
+ * Description  : Sends password reset OTP emails with the configured frontend URL.
+ * Author       : Hemang
+ * Date         : 27-11-2026
+ */
 @Service
 @RequiredArgsConstructor
 public class PasswordResetEmailServiceImpl
@@ -18,6 +24,9 @@ public class PasswordResetEmailServiceImpl
 
     @Value("${app.mail.from}")
     private String fromEmail;
+
+    @Value("${app.password-reset.url}")
+    private String frontendUrl;
 
     @Value("${app.password-reset.expiration-minutes:15}")
     private long expirationMinutes;
@@ -36,6 +45,8 @@ public class PasswordResetEmailServiceImpl
                         "We received a request to reset your Fundoo Notes password.\n\n" +
                         "Your password reset OTP is: " + otp + "\n\n" +
                         "This OTP expires in " + expirationMinutes + " minutes.\n\n" +
+                        "Open your Fundoo Notes frontend at " + frontendUrl +
+                        " and enter the OTP to complete the reset.\n\n" +
                         "Do not share this OTP with anyone.\n\n" +
                         "If you did not request this reset, please ignore this email.\n\n" +
                         "Regards,\nFundoo Notes Team"

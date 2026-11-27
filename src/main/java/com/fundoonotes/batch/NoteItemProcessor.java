@@ -6,29 +6,28 @@ import com.fundoonotes.entity.User;
 import jakarta.persistence.EntityManager;
 
 import org.springframework.batch.infrastructure.item.ItemProcessor;
-import org.springframework.stereotype.Component;
 
-/**
+/*
  * Project Name : Fundoo Notes Backend
- * Module       : Excel Item Processor
+ * Description  : Validates imported rows and assigns notes to the authenticated user.
  * Author       : Hemang
- * Date         : 14-11-2026
- *
- * Description:
- * Validates Excel records before saving them.
- * Converts valid NoteExcelRow objects into Note entities.
+ * Date         : 27-11-2026
  */
-@Component
 public class NoteItemProcessor
         implements ItemProcessor<NoteExcelRow, Note> {
 
     private final EntityManager entityManager;
+    private final Long authenticatedUserId;
 
     /**
-     * Initializes the processor with EntityManager.
+     * Initializes the processor with the authenticated import owner.
      */
-    public NoteItemProcessor(EntityManager entityManager) {
+    public NoteItemProcessor(
+            EntityManager entityManager,
+            Long authenticatedUserId) {
+
         this.entityManager = entityManager;
+        this.authenticatedUserId = authenticatedUserId;
     }
 
     /**
@@ -36,11 +35,6 @@ public class NoteItemProcessor
      */
     @Override
     public Note process(NoteExcelRow row) {
-
-        // Validate the user ID.
-        if (row.getUserId() == null || row.getUserId() <= 0) {
-            throw new IllegalArgumentException("Invalid user ID");
-        }
 
         // Validate the title.
         if (row.getTitle() == null || row.getTitle().isBlank()) {
@@ -53,8 +47,14 @@ public class NoteItemProcessor
                     "Title cannot exceed 255 characters");
         }
 
+        if (row.getDescription() != null
+                && row.getDescription().length() > 5000) {
+            throw new IllegalArgumentException(
+                    "Description cannot exceed 5000 characters");
+        }
+
         // Check whether the user exists.
-        User user = entityManager.find(User.class, row.getUserId());
+        User user = entityManager.find(User.class, authenticatedUserId);
 
         if (user == null) {
             throw new IllegalArgumentException("User does not exist");

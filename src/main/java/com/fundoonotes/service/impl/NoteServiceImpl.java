@@ -8,6 +8,7 @@ import com.fundoonotes.entity.User;
 import com.fundoonotes.repository.NoteRepository;
 import com.fundoonotes.repository.UserRepository;
 import com.fundoonotes.service.NoteService;
+import com.fundoonotes.service.ReminderService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -46,6 +47,7 @@ public class NoteServiceImpl implements NoteService {
 
     private final NoteRepository noteRepository;
     private final UserRepository userRepository;
+    private final ReminderService reminderService;
 
     // Creates a new note and clears cached note data after successful creation.
     @CacheEvict(
@@ -167,8 +169,13 @@ public class NoteServiceImpl implements NoteService {
         logger.info("Permanently deleting note with id={}", noteId);
 
         User user = findUserByEmail(email);
-        Note note = findNoteByIdAndUser(noteId, user.getId());
+        Note note = noteRepository.findByIdAndUser_IdForUpdate(noteId, user.getId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Note not found"
+                ));
 
+        reminderService.deleteForNote(note.getId(), user.getId());
         noteRepository.delete(note);
     }
 
@@ -242,8 +249,9 @@ public class NoteServiceImpl implements NoteService {
 
         logger.info("Moving note to trash with id={}", noteId);
 
-        Note note = findNoteForUser(noteId, email);
+        Note note = findNoteForUserForUpdate(noteId, email);
         note.setTrashed(true);
+        reminderService.cancelActiveForNote(note.getId(), note.getUser().getId());
 
         return mapToResponse(noteRepository.save(note));
     }
@@ -305,6 +313,17 @@ public class NoteServiceImpl implements NoteService {
         User user = findUserByEmail(email);
 
         return findNoteByIdAndUser(noteId, user.getId());
+    }
+
+    private Note findNoteForUserForUpdate(Long noteId, String email) {
+
+        User user = findUserByEmail(email);
+
+        return noteRepository.findByIdAndUser_IdForUpdate(noteId, user.getId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Note not found"
+                ));
     }
 
     // Converts a Note entity into a safe API response DTO.

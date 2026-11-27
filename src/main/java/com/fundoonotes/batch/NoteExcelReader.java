@@ -9,20 +9,19 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import org.springframework.batch.infrastructure.item.ItemReader;
-/**
+import org.springframework.batch.infrastructure.item.ItemStream;
+import org.springframework.batch.infrastructure.item.ItemStreamException;
+/*
  * Project Name : Fundoo Notes Backend
- * Module       : Excel Reader
+ * Description  : Reads XLSX note rows and releases workbook resources.
  * Author       : Hemang
- * Date         : 14-11-2026
- *
- * Description:
- * Reads note records from an Excel file.
- * Skips the header row and converts each remaining
- * row into a NoteExcelRow object.
+ * Date         : 27-11-2026
  */
-public class NoteExcelReader implements ItemReader<NoteExcelRow> {
+public class NoteExcelReader
+        implements ItemReader<NoteExcelRow>, ItemStream {
 
     private final String filePath;
 
@@ -61,21 +60,47 @@ public class NoteExcelReader implements ItemReader<NoteExcelRow> {
     }
 
     /**
+     * Releases workbook resources when the step completes or fails.
+     */
+    @Override
+    public void close() {
+
+        try {
+            closeWorkbook();
+        } catch (IOException exception) {
+            throw new ItemStreamException(
+                    "Unable to close Excel workbook", exception);
+        }
+    }
+
+    /**
      * Opens the Excel workbook and prepares its first sheet.
      */
     private void initializeWorkbook() throws IOException {
 
         inputStream = new FileInputStream(filePath);
 
-        workbook = WorkbookFactory.create(inputStream);
+        try {
+            workbook = WorkbookFactory.create(inputStream);
+            if (!(workbook instanceof XSSFWorkbook)) {
+                throw new IllegalArgumentException(
+                        "Only .xlsx workbook content is supported");
+            }
 
-        Sheet sheet = workbook.getSheetAt(0);
+            Sheet sheet = workbook.getSheetAt(0);
 
-        rowIterator = sheet.iterator();
+            rowIterator = sheet.iterator();
 
-        // Skip the first row because it contains column names.
-        if (rowIterator.hasNext()) {
-            rowIterator.next();
+            if (rowIterator.hasNext()) {
+                rowIterator.next();
+            }
+        } catch (IOException | RuntimeException exception) {
+            try {
+                closeWorkbook();
+            } catch (IOException closeException) {
+                exception.addSuppressed(closeException);
+            }
+            throw exception;
         }
     }
 

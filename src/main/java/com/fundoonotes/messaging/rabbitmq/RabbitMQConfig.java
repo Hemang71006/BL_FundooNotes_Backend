@@ -6,25 +6,28 @@ import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
+import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
+import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.amqp.rabbit.annotation.EnableRabbit;
 
-/**
+/*
  * Project Name : Fundoo Notes Backend
- * Module       : RabbitMQ Messaging - Configuration
+ * Description  : Configures RabbitMQ infrastructure and JSON message conversion.
  * Author       : Hemang
- * Date         : 14-11-2026
- *
- * Description:
- * Configures RabbitMQ messaging infrastructure.
- * Creates a durable queue, direct exchange, and binding
- * using the configured routing key.
+ * Date         : 27-11-2026
  */
 @Configuration
 @EnableRabbit
 public class RabbitMQConfig {
+
+    @Bean
+    public MessageConverter rabbitMessageConverter() {
+
+        return new JacksonJsonMessageConverter();
+    }
 
     @Bean
     public DirectExchange reminderExchange(
