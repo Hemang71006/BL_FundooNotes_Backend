@@ -1,6 +1,8 @@
 package com.fundoonotes.config;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fasterxml.jackson.module.paramnames.ParameterNamesModule;
@@ -15,7 +17,7 @@ import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.cache.RedisCacheWriter;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.cache.annotation.EnableCaching;
@@ -64,16 +66,17 @@ public class RedisConfig {
             RedisConnectionFactory connectionFactory) {
 
         // Registers Java time support for cached DTOs with LocalDateTime fields.
+        // ISO date strings and parameter-name constructors keep DTOs readable
+        // without polymorphic class names in Redis.
         ObjectMapper objectMapper = JsonMapper.builder()
                 .addModule(new JavaTimeModule())
                 .addModule(new ParameterNamesModule())
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                 .build();
 
-        GenericJackson2JsonRedisSerializer valueSerializer =
-                GenericJackson2JsonRedisSerializer.builder()
-                        .objectMapper(objectMapper)
-                        .defaultTyping(true)
-                        .build();
+        RedisSerializer<Object> valueSerializer =
+                new CacheJsonRedisSerializer(objectMapper);
 
         // Configures cache entries to expire after ten minutes.
         RedisCacheConfiguration cacheConfiguration =
